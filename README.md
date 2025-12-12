@@ -1,1 +1,1 @@
-# blog
+Simple Blog

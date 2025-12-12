@@ -1,0 +1,110 @@
+---
+title: "MLIR Tutorial md1 에 대하여"
+date: "2025-12-12"
+summary: "Introduction to the Toy language and the definition of its AST"
+tags: ["mlir", "dialect"]
+draft: false
+---
+
+1) 제시된 Toy 언어는
+- Tensor로 계산 (Rank는 최대 2, 벡터/형렬 까지만)
+- 타입은 double(64-bit float) 로 하나
+- 값은 immutable: a = b + c 같은 연산을 할 경우 새로운 값이 생기고 원래 값은 바뀌지 않음
+- 내장함수로는 transpose() 와 print()
+
+```
+var a = [[1, 2, 3], [4, 5, 6]];   # 자동으로 <2,3> 행렬로 추론됨
+var b<2, 3> = [1, 2, 3, 4, 5, 6]; # 납작한 배열을 <2,3>으로 “reshape”해서 선언
+print(transpose(a) * transpose(b));
+```
+
+여기서 핵심은:
+- 이중 리스트인 a는 자동으로 **&lt;`2,3`&gt;** 으로 shape 추론
+- 1차원 리스트인 b는 원소 개수가 같기 떄문에 **&lt;`2,3`&gt;** 를 붙여서 텐서 형태를 바꿀수 있음 (Reshape, 재형상화)
+
+2) Toy 의 함수가 "제네릭" 인 이유
+Toy 함수 파라미터는 분명 텐서이지만 shape를 알수가 없음.
+
+```
+def multiply_transpose(a, b) {
+  return transpose(a) * transpose(b);
+}
+```
+
+즉 함수 내용 만 보면 어떤 텐서든 transpose 하고 곱하라는 것이지만, 
+**&lt;`2,3`&gt;** 과 **&lt;`2,3`&gt;** 을 한번 호출했다면, 컴파일러가 이 버전으로 specialize (전문화) 를 생성 함.
+똑같은 걸 또 부르면 만든 specialize 버전을 재사용 하면 됨.
+그런데, **&lt;`3,2`&gt;** 와 **&lt;`3,2`&gt;** 를 부른다면 새로운 specialize를 한번 더 생성해야 함.
+shape가 안맞으면 당연히 에러를 출력해야 함.
+따라서 함수는 제네릭이어야 함. 호출할 때마다 shape가 정해지고, specialize 된 함수가 생성되는 방향
+
+3) AST는 무엇인가?
+
+심플함, 코드를 tree 형태로 만든것.
+이건 함수다, 블록이다, 변수 선언이다, 함수 호출이다. 이걸 구조화 한것.
+
+```
+Module:
+  Function 
+    Proto 'multiply_transpose' @test/Examples/Toy/Ch1/ast.toy:4:1
+    Params: [a, b]
+    Block {
+      Return
+        BinOp: * @test/Examples/Toy/Ch1/ast.toy:5:25
+          Call 'transpose' [ @test/Examples/Toy/Ch1/ast.toy:5:10
+            var: a @test/Examples/Toy/Ch1/ast.toy:5:20
+          ]
+          Call 'transpose' [ @test/Examples/Toy/Ch1/ast.toy:5:25
+            var: b @test/Examples/Toy/Ch1/ast.toy:5:35
+          ]
+    } // Block
+  Function 
+    Proto 'main' @test/Examples/Toy/Ch1/ast.toy:8:1
+    Params: []
+    Block {
+      VarDecl a<> @test/Examples/Toy/Ch1/ast.toy:11:3
+        Literal: <2, 3>[ <3>[ 1.000000e+00, 2.000000e+00, 3.000000e+00], <3>[ 4.000000e+00, 5.000000e+00, 6.000000e+00]] @test/Examples/Toy/Ch1/ast.toy:11:11
+      VarDecl b<2, 3> @test/Examples/Toy/Ch1/ast.toy:15:3
+        Literal: <6>[ 1.000000e+00, 2.000000e+00, 3.000000e+00, 4.000000e+00, 5.000000e+00, 6.000000e+00] @test/Examples/Toy/Ch1/ast.toy:15:17
+      VarDecl c<> @test/Examples/Toy/Ch1/ast.toy:19:3
+        Call 'multiply_transpose' [ @test/Examples/Toy/Ch1/ast.toy:19:11
+          var: a @test/Examples/Toy/Ch1/ast.toy:19:30
+          var: b @test/Examples/Toy/Ch1/ast.toy:19:33
+        ]
+      VarDecl d<> @test/Examples/Toy/Ch1/ast.toy:22:3
+        Call 'multiply_transpose' [ @test/Examples/Toy/Ch1/ast.toy:22:11
+          var: b @test/Examples/Toy/Ch1/ast.toy:22:30
+          var: a @test/Examples/Toy/Ch1/ast.toy:22:33
+        ]
+      VarDecl e<> @test/Examples/Toy/Ch1/ast.toy:25:3
+        Call 'multiply_transpose' [ @test/Examples/Toy/Ch1/ast.toy:25:11
+          var: c @test/Examples/Toy/Ch1/ast.toy:25:30
+          var: d @test/Examples/Toy/Ch1/ast.toy:25:33
+        ]
+      VarDecl f<> @test/Examples/Toy/Ch1/ast.toy:28:3
+        Call 'multiply_transpose' [ @test/Examples/Toy/Ch1/ast.toy:28:11
+          var: a @test/Examples/Toy/Ch1/ast.toy:28:30
+          var: c @test/Examples/Toy/Ch1/ast.toy:28:33
+        ]
+    } // Block
+```
+
+이 dump 내용을 차근차근 분석해 보면
+- Module : 파일 전체
+- Function multiply_transpose
+- proto : 함수 이름 / 위치 / 파라미터
+- BinOp: * : 곱셈 연산
+- VarDecl a : 변수 a 선언
+- Literal **&lt;`2,3`&gt;** ... : 리터럴 텐서 값
+- VarDecl b**&lt;`2,3`&gt;** : b 선언 (reshape)
+- VarDecl c : 함수 호출 결과 저장
+
+@test/Examples/Toy/Ch1/ast.toy:19:11 이런건 이 노드가 소스코드의 몇 번째 줄 / 몇 번째 칸에서 왔는지를 적어둔 것.
+
+4) Lexer / Parser
+Lexer는 어휘 분석기로 글자를 토큰으로 자르는 역할
+Parser는 구문 분석기로 토큰을 읽어서 AST로 만드는 역할
+튜토리얼은 재귀 하강 (Recursive Descent) 이라는 근본 Parser 방식을 사용함. 
+
+Flow를 요약해 보자면
+소스코드 -> Lexer (토큰화) -> Parser (AST 만들기) -> MLIR 로의 변환
