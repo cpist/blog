@@ -1,0 +1,211 @@
+<!DOCTYPE html><!--AA_wbEE6jFAhQ_XPH0itZ--><html lang="ko"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="/blog/_next/static/chunks/d335db6b3f1a2619.css" data-precedence="next"/><link rel="preload" as="script" fetchPriority="low" href="/blog/_next/static/chunks/cbd55ab9639e1e66.js"/><script src="/blog/_next/static/chunks/8c4bb65ca9f95eb5.js" async=""></script><script src="/blog/_next/static/chunks/0ff423a9fcc0186e.js" async=""></script><script src="/blog/_next/static/chunks/88a8688d62cd2814.js" async=""></script><script src="/blog/_next/static/chunks/turbopack-8ff2f6efb1e78309.js" async=""></script><script src="/blog/_next/static/chunks/796e69ae18b2784c.js" async=""></script><script src="/blog/_next/static/chunks/ff1a16fafef87110.js" async=""></script><script src="/blog/_next/static/chunks/247eb132b7f7b574.js" async=""></script><title>MLIR Tutorial md2 에 대하여 - My Blog</title><meta name="description" content="Traversing the AST to emit a dialect in MLIR, introducing base MLIR concepts. Here we show how to start attaching semantics to our custom operations in MLIR."/><link rel="icon" href="/blog/favicon.ico?favicon.0b3bf435.ico" sizes="256x256" type="image/x-icon"/><script src="/blog/_next/static/chunks/a6dad97d9634a72d.js" noModule=""></script></head><body><div hidden=""><!--$--><!--/$--></div><main><header style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><h1 style="margin:8px 0"><a style="text-decoration:none" href="/blog/">My Blog</a></h1><nav style="display:flex;gap:12px"><a href="/blog/posts/">Posts</a></nav></header><hr style="border:0;border-top:1px solid #eee;margin:12px 0 24px"/><article><div style="color:#666;margin-bottom:6px"><a href="/mlir" style="text-decoration:none">/<!-- -->mlir</a></div><h2 style="margin-top:0">MLIR Tutorial md2 에 대하여</h2><div style="color:#666;margin-bottom:18px">2025-12-13</div><p style="color:#333">Traversing the AST to emit a dialect in MLIR, introducing base MLIR concepts. Here we show how to start attaching semantics to our custom operations in MLIR.</p><hr style="border:0;border-top:1px solid #eee;margin:18px 0"/><div class="prose"><ol>
+<li>MLIR은 왜 나오게 되었는가?
+LLVM은 저레벨에 가까움</li>
+</ol>
+<ul>
+<li>타입/명령어(인스트럭션) 세트가 꽤 고정되어 있음.</li>
+<li>그래서 언어가 고수준이면 (텐서, 자동 미분, shape 추론 등)<!-- -->
+<ul>
+<li>프런트엔드가 자기 혼자 분석/최적화/변환을 다 하다가</li>
+<li>마지막에 LLVM IR로 번역 진행</li>
+</ul>
+</li>
+<li>따라서 여러 언어가 비슷한 인프라를 매번 재구현</li>
+</ul>
+<p>MLIR은 이걸 해결하기 위해 나왔는데
+MLIR은 이걸 고수준부터 저수준까지 여러 단계(IR 레벨)을 하나의 프레임워크에서 다루게 함.
+이걸 가능하게 하는 핵심이 확장성(Extensibility) 이고, 이 방식이 Dialect이다.</p>
+<ol start="2">
+<li>Operation (그리고 빼놓을 수 없는 SSA)</li>
+</ol>
+<p>MLIR에서 모든 건 Operation 임.</p>
+<ul>
+<li>LLVM의 instruction 같은 존재이기도 하고<!-- -->
+<ul>
+<li>참고로 LLVM에서 instruction은 LLVM IR 안에서 &#x27;한 단계&#x27;의 계산/동작임. 즉 가장 기본 연산 단위</li>
+<li>산술/논리 연산 (add, mul, fadd, icmp), 메모리 접근 (alloca(스택 할당), load, store, getelementptr(주소 계산)), 제어 흐름 (br(분기), switch, ret), 함수 호출 (call, invoke)</li>
+<li>LLVM IR은 SSA 기반이라, instruction이 값을 만들면 이름표가 붙음</li>
+</ul>
+</li>
+</ul>
+<p>여기서 SSA에 대해 좀 기나긴 설명을 진행해 보자.</p>
+<pre><code>%sum = add i32 %a, %b
+</code></pre>
+<ul>
+<li>add i32 %a, %b 가 instruction</li>
+<li>%sum 은 그 instruction 이 만들어낸 SSA 값(result)</li>
+<li>참고로 SSA 는 Static Single Assignment로, 각 변수는 프로그램 전체에서 단 한 번만 값이 할당된다는 규칙을 가진 중간 표현 (IR) 방식임.</li>
+</ul>
+<pre><code>int x = 1;
+x = x + 1;
+x = x * 2;
+</code></pre>
+<p>사람은 이렇게 x가 여러번 쓰이는걸 이해하기 쉽지만, 컴파일러는 추적하기가 귀찮음.
+SSA 스타일로 바뀌면 아래와 같아짐.</p>
+<pre><code>x1 = 1
+x2 = x1 + 1
+x3 = x2 * 2
+</code></pre>
+<p>이렇게 x1, x2, x3는 각각 한번만 정의되었음. 즉 변수가 재할당 되는게 아니라, 새 값을 만들 때마다 새 이름을 붙임.
+LLVM IR 에서는 실제로 이런식임.</p>
+<pre><code>%x1 = add i32 0, 1
+%x2 = add i32 %x1, 1
+%x3 = mul i32 %x2, 2
+</code></pre>
+<p>SSA에서는 mutable 변수 개념이 사라지고</p>
+<ul>
+<li>모든 값은 immutable</li>
+<li>값의 흐름은 그래프 형태로 연결이 됨.
+따라서 SSA는 보통 이렇게 생각을 함.</li>
+<li>프로그램 = 값이 흘러가는 데이터 흐름 그래프</li>
+</ul>
+<p>분기문이 있을경우에는</p>
+<pre><code>if (cond)
+  x = 1;
+else
+  x = 2;
+y = x + 3;
+</code></pre>
+<p>SSA는 아래와 같이 바꿈.</p>
+<pre><code>x1 = 1        ; then 블록
+x2 = 2        ; else 블록
+x3 = phi(x1, x2)
+y  = x3 + 3
+</code></pre>
+<p>여기서 φ(phi) 함수 가 나오는데
+이것의 의미는 어느 블록에서 왔느냐에 따라 값을 선택한다는 것.
+실제 계산이 아니라 제어 흐름에 따른 값 선택 장치
+LLVM IR 에서는 아래와 같이 생김</p>
+<pre><code>%x3 = phi i32 [ %x1, %then ], [ %x2, %else ]
+</code></pre>
+<p>이제 기나긴 SSA 설명을 끝내고 돌아와서...</p>
+<ul>
+<li>함수, 모듈 같은 구조도 operation 으로 표현 가능함.</li>
+</ul>
+<p>예를 들어 Toy의 전치 연산은</p>
+<pre><code>%t = &quot;toy.transpose&quot;(%tensor) {inplace = true} : (tensor&lt;2x3xf64&gt;) -&gt; tensor&lt;3x2xf64&gt; loc(&quot;...&quot;:12:1)
+</code></pre>
+<ul>
+<li>%t는 결과 SSA 값임</li>
+<li>&quot;toy.transpose&quot; : toy dialect의 transpose operation (dialect의 개념)</li>
+<li>(%tensor) : 입력 (operand)</li>
+<li><code>{inplace = true}</code> : 속성(attribute) : 항상 상수인 메타데이터</li>
+<li>: (tensor <code>&lt;2x3xf64&gt;</code> ) -&gt; tensor <code>&lt;3x2xf64&gt;</code> : 타입 (입력/출력)</li>
+<li>loc(...) : 소스코드 위치(디버깅/에러 추적용)
+loc 이 중요한 이유는 LLVM 에서는 디버그 정보가 메타데이터라 날아갈수 있는데, MLIR 에서는 필수이기 떄문에 변환을 하더라도 이게 원래 코드 어디서 왔는지 추적이 가능함.</li>
+</ul>
+<ol start="3">
+<li>Dialect는 무엇일까?
+언어 / 도메인의 개념을 MLIR에 꽂아 넣는 플러그인 묶음임.</li>
+</ol>
+<ul>
+<li>고유 namespace를 갖고 (toy. 같은 접두사)</li>
+<li>그 안에 operations, types, attributes 등을 등록함</li>
+<li>그래서 MLIR이 그 의미를 알고 검증, 변환, 최적화를 할 수 있게 됨.</li>
+</ul>
+<p>Toy는 그렇기 때문에 ToyDialect 를 정의하고</p>
+<pre><code>context.loadDialect&lt;ToyDialect&gt;();
+</code></pre>
+<p>이런 식으로 MLIRContext에 로딩해서 써먹을 수 있다.</p>
+<ol start="4">
+<li>그런데 등록 안해도 MLIR은 돌아갈 수 있다. (Opaque API)
+MLIR은 신기하게도 dialect 를 등록하지 않아도 &quot;toy.transpose&quot; 같은 텍스트 IR을 그냥 구조적으로만 파싱해서 round-trip(읽고-&gt;다시 출력) 가능.
+단점은 의미를 모르니까 검증을 제대로 못하고, 말도 안되는 IR도 통과할 수 있다는 점이다.</li>
+</ol>
+<pre><code>%0 = &quot;toy.print&quot;() : () -&gt; tensor&lt;2x3xf64&gt;
+</code></pre>
+<p>이런건 print가 operand도 없고, 리턴도 하면 안되는데 등록하면 MLIR은 그냥 모르는 op 니까 대충 넘어감.
+따라서 무조건 dialect+operation 을 등록해서 의미를 알려줘야 한다.</p>
+<ol start="5">
+<li>toy.constant 같은 operation을 정식으로 정의하는 것
+시작에 앞서 literal은 소스 코드에 &#x27;그 값 자체&#x27; 를 직접 써놓은 것을 말함. 계산 결과가 아니라 그냥 값 자체</li>
+</ol>
+<pre><code>[1, 2, 3]
+[[1, 2, 3], [4, 5, 6]]
+</code></pre>
+<p>이렇게 계산이나 변수를 통해 오지 않은, 코드에 하드코딩된 텐서 값이 literal tensor
+toy에서 literal tensor 를 SSA 값으로 만드는 op:</p>
+<pre><code>%4 = &quot;toy.constant&quot;() {value = dense&lt;1.0&gt; : tensor&lt;2x3xf64&gt;} : () -&gt; tensor&lt;2x3xf64&gt;
+</code></pre>
+<p>입력 operand는 없는데, 대신 value 라는 attribute에 tensor 값이 들어있다. (dense elements)
+결과로 tensor 하나를 뱉음.</p>
+<ol start="6">
+<li>Operation은 C++로 만들 수도 있고, TableGen(ODS) 로도 만들 수가 있음.
+(1) C++ 로 직접 만들면
+class ConstantOp : public mlir::Op <code>&lt;...traits...&gt; { ... }</code>
+장점은 자유도가 있다는 점이고, 단점은 보일러플레이트(Boilerplate)가 많다는 점이다.
+보일러플레이트는 매번 거의 똑같이 써야 하는 의미는 없고 형식만 중요한 코드임. (새로운 정보가 없다.)</li>
+</ol>
+<p>(2) TableGen 으로 선언적으로 만들면
+ODS (Operation Definition Specification) 을 통해 핵심 의미만 남고, 반복적이고 형식적인 코드는 자동 생성된다.</p>
+<pre><code>def ConstantOp : Toy_Op&lt;&quot;constant&quot;&gt; {
+  let arguments = (ins F64ElementsAttr:$value);
+  let results = (outs F64Tensor);
+}
+</code></pre>
+<p>자동으로</p>
+<ul>
+<li>접근자(accessor) 가 생성되고 op.value() 같은</li>
+<li>trait이 일부 자동 추론이 되고 (operand는 0개이고, result는 1개인것 같은)</li>
+<li>검증 로직도 상당 부분 자동 생성이 된다.
+추가적으로</li>
+<li>summary/description 써서 문서 자동 생성도 가능하고</li>
+<li>hasVerifier = 1; 로 커스텀 검증도 붙일 수가 있음.</li>
+<li>builders 로 ConstantOp::build(...) 생성 규칙을 만들 수가 있음.
+ODS는 &quot;Operation 명세서를 쓰면 C++ 코드가 자동으로 생성되는 설계도 시스템인 셈.&quot;</li>
+</ul>
+<ol start="7">
+<li>Op vs Operation</li>
+</ol>
+<ul>
+<li>Operation* : 모든 op를 담는 범용 박스 (opaque)</li>
+<li>ConstantOp 같은 Op 클래스 : 그 박스를 감싼 타입 안전한 래퍼 (like smart pointer)</li>
+</ul>
+<pre><code>ConstantOp op = llvm::dyn_cast&lt;ConstantOp&gt;(operation);
+</code></pre>
+<ul>
+<li>mlir::Operation* = 모든 op의 공통 실체</li>
+<li>ConstantOp = 그 실체를 특정 op 타입으로 다루기 위한 타입 안전 래퍼</li>
+<li>dyn_cast <code>&lt;ConstantOp&gt;</code> (operation) = 이게 ConstantOp 맞으면 래퍼로 변환</li>
+</ul>
+<p>즉 mlir::Operation* operation이 실제로 toy.constant 같은 ConstantOp에 해당하는 op라면, 그걸 ConstantOp 래퍼로 감싸서 돌려주거나, 아니면 실패(null 같은 값)로 돌려주라는 의미임.</p>
+<ol start="8">
+<li>Toy 코드가 MLIR에서는 어떻게 보이는 것인가?</li>
+</ol>
+<pre><code>var b&lt;2,3&gt; = [1,2,3,4,5,6];
+</code></pre>
+<p>MLIR에서는 이런 흐름으로
+(1) 1D literal을 constant로 만들고 (tensor<code>&lt;6xf64&gt;</code>)</p>
+<ul>
+<li>참고로 컴파일러에서는 constant랑 literal 이 다름. literal은 소스 코드에 쓰인 값이고, constant는 IR에서 상수로 표현 된 값임.
+따라서 Literal -&gt; (컴파일 과정) -&gt; Constant
+(2) reshape 로 tensor <code>&lt;2x3xf64&gt;</code> 로 바꾼다.</li>
+</ul>
+<pre><code>%2 = toy.constant dense&lt;[...]&gt; : tensor&lt;6xf64&gt;
+%3 = toy.reshape(%2 : tensor&lt;6xf64&gt;) to tensor&lt;2x3xf64&gt;
+</code></pre>
+<p>즉, AST에서 &quot;선언&quot;으로 보였던 게 MLIR 에서는 constant + reshape 라는 명시적 op 시퀀스로 풀려나오는 것.</p>
+<ol start="9">
+<li>왜 출력이 처음에는 지저분 하고 나중에는 깔끔해 질까?
+처음에는 &quot;generic assembly format&quot; 이기 때문에</li>
+</ol>
+<pre><code>&quot;toy.print&quot;(%5) : (tensor&lt;*xf64&gt;) -&gt; ()
+</code></pre>
+<p>쓸데 없는 괄호 / 타입 / 화살표가 붙어있음
+이 op에 custom assembly format을 지정하면</p>
+<pre><code>toy.print %5 : tensor&lt;*xf64&gt;
+</code></pre>
+<p>사람이 읽기 좋게 줄일 수가 있음.</p>
+<ul>
+<li>C++ 에서 pint() / parse() 를 직접 구현하거나</li>
+<li>TableGen 에서 assemblyForamt = &quot;...&quot;; 로 선언적으로 지정 할 수 있음.</li>
+</ul>
+<p>=====================================================================</p>
+<p>긴 내용을 정리해 보자면</p>
+<ul>
+<li>MLIR은 확장 가능한 IR 프레임워크이고</li>
+<li>이 확장의 단위는 Dialect 이다.</li>
+<li>Dialect 안에서 Operation을 정의해 의미 / 검증 / 빌더 / 출력 포맷을 제공한다.</li>
+<li>등록 안 해도 &quot;구조적으로&quot; 는 다룰 수 있지만, 제대로 하려면 등록해야 한다.</li>
+<li>TOy AST -&gt; Toy Dialect ops -&gt; 더 낮은 레벨로 점점 lowering 이 가능해 진다.</li>
+</ul></div></article><!--$--><!--/$--><footer style="margin-top:48px;padding-top:16px;border-top:1px solid #eee;color:#666">© <!-- -->2025<!-- --> My Blog</footer></main><script src="/blog/_next/static/chunks/cbd55ab9639e1e66.js" id="_R_" async=""></script><script>(self.__next_f=self.__next_f||[]).push([0])</script><script>self.__next_f.push([1,"1:\"$Sreact.fragment\"\n2:I[22016,[\"/blog/_next/static/chunks/796e69ae18b2784c.js\"],\"\"]\n3:I[39756,[\"/blog/_next/static/chunks/ff1a16fafef87110.js\",\"/blog/_next/static/chunks/247eb132b7f7b574.js\"],\"default\"]\n4:I[37457,[\"/blog/_next/static/chunks/ff1a16fafef87110.js\",\"/blog/_next/static/chunks/247eb132b7f7b574.js\"],\"default\"]\n6:I[97367,[\"/blog/_next/static/chunks/ff1a16fafef87110.js\",\"/blog/_next/static/chunks/247eb132b7f7b574.js\"],\"OutletBoundary\"]\n7:\"$Sreact.suspense\"\n9:I[97367,[\"/blog/_next/static/chunks/ff1a16fafef87110.js\",\"/blog/_next/static/chunks/247eb132b7f7b574.js\"],\"ViewportBoundary\"]\nb:I[97367,[\"/blog/_next/static/chunks/ff1a16fafef87110.js\",\"/blog/_next/static/chunks/247eb132b7f7b574.js\"],\"MetadataBoundary\"]\nd:I[68027,[],\"default\"]\n:HL[\"/blog/_next/static/chunks/d335db6b3f1a2619.css\",\"style\"]\n"])</script><script>self.__next_f.push([1,"0:{\"P\":null,\"b\":\"AA_wbEE6jFAhQ-XPH0itZ\",\"c\":[\"\",\"posts\",\"mlir\",\"md2\",\"\"],\"q\":\"\",\"i\":false,\"f\":[[[\"\",{\"children\":[\"posts\",{\"children\":[[\"slug\",\"mlir/md2\",\"c\"],{\"children\":[\"__PAGE__\",{}]}]}]},\"$undefined\",\"$undefined\",true],[[\"$\",\"$1\",\"c\",{\"children\":[[[\"$\",\"link\",\"0\",{\"rel\":\"stylesheet\",\"href\":\"/blog/_next/static/chunks/d335db6b3f1a2619.css\",\"precedence\":\"next\",\"crossOrigin\":\"$undefined\",\"nonce\":\"$undefined\"}],[\"$\",\"script\",\"script-0\",{\"src\":\"/blog/_next/static/chunks/796e69ae18b2784c.js\",\"async\":true,\"nonce\":\"$undefined\"}]],[\"$\",\"html\",null,{\"lang\":\"ko\",\"children\":[\"$\",\"body\",null,{\"children\":[\"$\",\"main\",null,{\"children\":[[\"$\",\"header\",null,{\"style\":{\"display\":\"flex\",\"justifyContent\":\"space-between\",\"alignItems\":\"baseline\",\"gap\":12},\"children\":[[\"$\",\"h1\",null,{\"style\":{\"margin\":\"8px 0\"},\"children\":[\"$\",\"$L2\",null,{\"href\":\"/\",\"style\":{\"textDecoration\":\"none\"},\"children\":\"My Blog\"}]}],[\"$\",\"nav\",null,{\"style\":{\"display\":\"flex\",\"gap\":12},\"children\":[\"$\",\"$L2\",null,{\"href\":\"/posts\",\"children\":\"Posts\"}]}]]}],[\"$\",\"hr\",null,{\"style\":{\"border\":0,\"borderTop\":\"1px solid #eee\",\"margin\":\"12px 0 24px\"}}],[\"$\",\"$L3\",null,{\"parallelRouterKey\":\"children\",\"error\":\"$undefined\",\"errorStyles\":\"$undefined\",\"errorScripts\":\"$undefined\",\"template\":[\"$\",\"$L4\",null,{}],\"templateStyles\":\"$undefined\",\"templateScripts\":\"$undefined\",\"notFound\":[[[\"$\",\"title\",null,{\"children\":\"404: This page could not be found.\"}],[\"$\",\"div\",null,{\"style\":{\"fontFamily\":\"system-ui,\\\"Segoe UI\\\",Roboto,Helvetica,Arial,sans-serif,\\\"Apple Color Emoji\\\",\\\"Segoe UI Emoji\\\"\",\"height\":\"100vh\",\"textAlign\":\"center\",\"display\":\"flex\",\"flexDirection\":\"column\",\"alignItems\":\"center\",\"justifyContent\":\"center\"},\"children\":[\"$\",\"div\",null,{\"children\":[[\"$\",\"style\",null,{\"dangerouslySetInnerHTML\":{\"__html\":\"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}\"}}],[\"$\",\"h1\",null,{\"className\":\"next-error-h1\",\"style\":{\"display\":\"inline-block\",\"margin\":\"0 20px 0 0\",\"padding\":\"0 23px 0 0\",\"fontSize\":24,\"fontWeight\":500,\"verticalAlign\":\"top\",\"lineHeight\":\"49px\"},\"children\":404}],[\"$\",\"div\",null,{\"style\":{\"display\":\"inline-block\"},\"children\":[\"$\",\"h2\",null,{\"style\":{\"fontSize\":14,\"fontWeight\":400,\"lineHeight\":\"49px\",\"margin\":0},\"children\":\"This page could not be found.\"}]}]]}]}]],[]],\"forbidden\":\"$undefined\",\"unauthorized\":\"$undefined\"}],[\"$\",\"footer\",null,{\"style\":{\"marginTop\":48,\"paddingTop\":16,\"borderTop\":\"1px solid #eee\",\"color\":\"#666\"},\"children\":[\"© \",2025,\" My Blog\"]}]]}]}]}]]}],{\"children\":[[\"$\",\"$1\",\"c\",{\"children\":[null,[\"$\",\"$L3\",null,{\"parallelRouterKey\":\"children\",\"error\":\"$undefined\",\"errorStyles\":\"$undefined\",\"errorScripts\":\"$undefined\",\"template\":[\"$\",\"$L4\",null,{}],\"templateStyles\":\"$undefined\",\"templateScripts\":\"$undefined\",\"notFound\":\"$undefined\",\"forbidden\":\"$undefined\",\"unauthorized\":\"$undefined\"}]]}],{\"children\":[[\"$\",\"$1\",\"c\",{\"children\":[null,[\"$\",\"$L3\",null,{\"parallelRouterKey\":\"children\",\"error\":\"$undefined\",\"errorStyles\":\"$undefined\",\"errorScripts\":\"$undefined\",\"template\":[\"$\",\"$L4\",null,{}],\"templateStyles\":\"$undefined\",\"templateScripts\":\"$undefined\",\"notFound\":\"$undefined\",\"forbidden\":\"$undefined\",\"unauthorized\":\"$undefined\"}]]}],{\"children\":[[\"$\",\"$1\",\"c\",{\"children\":[\"$L5\",null,[\"$\",\"$L6\",null,{\"children\":[\"$\",\"$7\",null,{\"name\":\"Next.MetadataOutlet\",\"children\":\"$@8\"}]}]]}],{},null,false,false]},null,false,false]},null,false,false]},null,false,false],[\"$\",\"$1\",\"h\",{\"children\":[null,[\"$\",\"$L9\",null,{\"children\":\"$@a\"}],[\"$\",\"div\",null,{\"hidden\":true,\"children\":[\"$\",\"$Lb\",null,{\"children\":[\"$\",\"$7\",null,{\"name\":\"Next.Metadata\",\"children\":\"$@c\"}]}]}],null]}],false]],\"m\":\"$undefined\",\"G\":[\"$d\",[]],\"S\":true}\n"])</script><script>self.__next_f.push([1,"5:[\"$\",\"article\",null,{\"children\":[[\"$\",\"div\",null,{\"style\":{\"color\":\"#666\",\"marginBottom\":6},\"children\":[\"$\",\"a\",null,{\"href\":\"/mlir\",\"style\":{\"textDecoration\":\"none\"},\"children\":[\"/\",\"mlir\"]}]}],[\"$\",\"h2\",null,{\"style\":{\"marginTop\":0},\"children\":\"MLIR Tutorial md2 에 대하여\"}],[\"$\",\"div\",null,{\"style\":{\"color\":\"#666\",\"marginBottom\":18},\"children\":\"2025-12-13\"}],[\"$\",\"p\",null,{\"style\":{\"color\":\"#333\"},\"children\":\"Traversing the AST to emit a dialect in MLIR, introducing base MLIR concepts. Here we show how to start attaching semantics to our custom operations in MLIR.\"}],[\"$\",\"hr\",null,{\"style\":{\"border\":0,\"borderTop\":\"1px solid #eee\",\"margin\":\"18px 0\"}}],[\"$\",\"div\",null,{\"className\":\"prose\",\"children\":[[\"$\",\"ol\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"MLIR은 왜 나오게 되었는가?\\nLLVM은 저레벨에 가까움\"}],\"\\n\"]}],\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"타입/명령어(인스트럭션) 세트가 꽤 고정되어 있음.\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":[\"그래서 언어가 고수준이면 (텐서, 자동 미분, shape 추론 등)\",\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"프런트엔드가 자기 혼자 분석/최적화/변환을 다 하다가\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"마지막에 LLVM IR로 번역 진행\"}],\"\\n\"]}],\"\\n\"]}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"따라서 여러 언어가 비슷한 인프라를 매번 재구현\"}],\"\\n\"]}],\"\\n\",[\"$\",\"p\",null,{\"children\":\"MLIR은 이걸 해결하기 위해 나왔는데\\nMLIR은 이걸 고수준부터 저수준까지 여러 단계(IR 레벨)을 하나의 프레임워크에서 다루게 함.\\n이걸 가능하게 하는 핵심이 확장성(Extensibility) 이고, 이 방식이 Dialect이다.\"}],\"\\n\",[\"$\",\"ol\",null,{\"start\":\"2\",\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"Operation (그리고 빼놓을 수 없는 SSA)\"}],\"\\n\"]}],\"\\n\",[\"$\",\"p\",null,{\"children\":\"MLIR에서 모든 건 Operation 임.\"}],\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":[\"LLVM의 instruction 같은 존재이기도 하고\",\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"참고로 LLVM에서 instruction은 LLVM IR 안에서 '한 단계'의 계산/동작임. 즉 가장 기본 연산 단위\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"산술/논리 연산 (add, mul, fadd, icmp), 메모리 접근 (alloca(스택 할당), load, store, getelementptr(주소 계산)), 제어 흐름 (br(분기), switch, ret), 함수 호출 (call, invoke)\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"LLVM IR은 SSA 기반이라, instruction이 값을 만들면 이름표가 붙음\"}],\"\\n\"]}],\"\\n\"]}],\"\\n\"]}],\"\\n\",[\"$\",\"p\",null,{\"children\":\"여기서 SSA에 대해 좀 기나긴 설명을 진행해 보자.\"}],\"\\n\",[\"$\",\"pre\",null,{\"children\":[\"$\",\"code\",null,{\"children\":\"%sum = add i32 %a, %b\\n\"}]}],\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"add i32 %a, %b 가 instruction\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"%sum 은 그 instruction 이 만들어낸 SSA 값(result)\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"참고로 SSA 는 Static Single Assignment로, 각 변수는 프로그램 전체에서 단 한 번만 값이 할당된다는 규칙을 가진 중간 표현 (IR) 방식임.\"}],\"\\n\"]}],\"\\n\",[\"$\",\"pre\",null,{\"children\":[\"$\",\"code\",null,{\"children\":\"int x = 1;\\nx = x + 1;\\nx = x * 2;\\n\"}]}],\"\\n\",[\"$\",\"p\",null,{\"children\":\"사람은 이렇게 x가 여러번 쓰이는걸 이해하기 쉽지만, 컴파일러는 추적하기가 귀찮음.\\nSSA 스타일로 바뀌면 아래와 같아짐.\"}],\"\\n\",[\"$\",\"pre\",null,{\"children\":[\"$\",\"code\",null,{\"children\":\"x1 = 1\\nx2 = x1 + 1\\nx3 = x2 * 2\\n\"}]}],\"\\n\",[\"$\",\"p\",null,{\"children\":\"이렇게 x1, x2, x3는 각각 한번만 정의되었음. 즉 변수가 재할당 되는게 아니라, 새 값을 만들 때마다 새 이름을 붙임.\\nLLVM IR 에서는 실제로 이런식임.\"}],\"\\n\",[\"$\",\"pre\",null,{\"children\":[\"$\",\"code\",null,{\"children\":\"%x1 = add i32 0, 1\\n%x2 = add i32 %x1, 1\\n%x3 = mul i32 %x2, 2\\n\"}]}],\"\\n\",[\"$\",\"p\",null,{\"children\":\"SSA에서는 mutable 변수 개념이 사라지고\"}],\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"모든 값은 immutable\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"값의 흐름은 그래프 형태로 연결이 됨.\\n따라서 SSA는 보통 이렇게 생각을 함.\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"프로그램 = 값이 흘러가는 데이터 흐름 그래프\"}],\"\\n\"]}],\"\\n\",[\"$\",\"p\",null,{\"children\":\"분기문이 있을경우에는\"}],\"\\n\",[\"$\",\"pre\",null,{\"children\":[\"$\",\"code\",null,{\"children\":\"if (cond)\\n  x = 1;\\nelse\\n  x = 2;\\ny = x + 3;\\n\"}]}],\"\\n\",[\"$\",\"p\",null,{\"children\":\"SSA는 아래와 같이 바꿈.\"}],\"\\n\",[\"$\",\"pre\",null,{\"children\":[\"$\",\"code\",null,{\"children\":\"x1 = 1        ; then 블록\\nx2 = 2        ; else 블록\\nx3 = phi(x1, x2)\\ny  = x3 + 3\\n\"}]}],\"\\n\",[\"$\",\"p\",null,{\"children\":\"여기서 φ(phi) 함수 가 나오는데\\n이것의 의미는 어느 블록에서 왔느냐에 따라 값을 선택한다는 것.\\n실제 계산이 아니라 제어 흐름에 따른 값 선택 장치\\nLLVM IR 에서는 아래와 같이 생김\"}],\"\\n\",[\"$\",\"pre\",null,{\"children\":[\"$\",\"code\",null,{\"children\":\"%x3 = phi i32 [ %x1, %then ], [ %x2, %else ]\\n\"}]}],\"\\n\",[\"$\",\"p\",null,{\"children\":\"이제 기나긴 SSA 설명을 끝내고 돌아와서...\"}],\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"함수, 모듈 같은 구조도 operation 으로 표현 가능함.\"}],\"\\n\"]}],\"\\n\",[\"$\",\"p\",null,{\"children\":\"예를 들어 Toy의 전치 연산은\"}],\"\\n\",[\"$\",\"pre\",null,{\"children\":[\"$\",\"code\",null,{\"children\":\"%t = \\\"toy.transpose\\\"(%tensor) {inplace = true} : (tensor\u003c2x3xf64\u003e) -\u003e tensor\u003c3x2xf64\u003e loc(\\\"...\\\":12:1)\\n\"}]}],\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",\"$Le\",\"\\n\",\"$Lf\",\"\\n\",\"$L10\",\"\\n\",\"$L11\",\"\\n\",\"$L12\",\"\\n\",\"$L13\",\"\\n\"]}],\"\\n\",\"$L14\",\"\\n\",\"$L15\",\"\\n\",\"$L16\",\"\\n\",\"$L17\",\"\\n\",\"$L18\",\"\\n\",\"$L19\",\"\\n\",\"$L1a\",\"\\n\",\"$L1b\",\"\\n\",\"$L1c\",\"\\n\",\"$L1d\",\"\\n\",\"$L1e\",\"\\n\",\"$L1f\",\"\\n\",\"$L20\",\"\\n\",\"$L21\",\"\\n\",\"$L22\",\"\\n\",\"$L23\",\"\\n\",\"$L24\",\"\\n\",\"$L25\",\"\\n\",\"$L26\",\"\\n\",\"$L27\",\"\\n\",\"$L28\",\"\\n\",\"$L29\",\"\\n\",\"$L2a\",\"\\n\",\"$L2b\",\"\\n\",\"$L2c\",\"\\n\",\"$L2d\",\"\\n\",\"$L2e\",\"\\n\",\"$L2f\",\"\\n\",\"$L30\",\"\\n\",\"$L31\",\"\\n\",\"$L32\",\"\\n\",\"$L33\",\"\\n\",\"$L34\",\"\\n\",\"$L35\",\"\\n\",\"$L36\",\"\\n\",\"$L37\",\"\\n\",\"$L38\",\"\\n\",\"$L39\"]}]]}]\n"])</script><script>self.__next_f.push([1,"e:[\"$\",\"li\",null,{\"children\":\"%t는 결과 SSA 값임\"}]\nf:[\"$\",\"li\",null,{\"children\":\"\\\"toy.transpose\\\" : toy dialect의 transpose operation (dialect의 개념)\"}]\n10:[\"$\",\"li\",null,{\"children\":\"(%tensor) : 입력 (operand)\"}]\n11:[\"$\",\"li\",null,{\"children\":[[\"$\",\"code\",null,{\"children\":\"{inplace = true}\"}],\" : 속성(attribute) : 항상 상수인 메타데이터\"]}]\n12:[\"$\",\"li\",null,{\"children\":[\": (tensor \",[\"$\",\"code\",null,{\"children\":\"\u003c2x3xf64\u003e\"}],\" ) -\u003e tensor \",[\"$\",\"code\",null,{\"children\":\"\u003c3x2xf64\u003e\"}],\" : 타입 (입력/출력)\"]}]\n13:[\"$\",\"li\",null,{\"children\":\"loc(...) : 소스코드 위치(디버깅/에러 추적용)\\nloc 이 중요한 이유는 LLVM 에서는 디버그 정보가 메타데이터라 날아갈수 있는데, MLIR 에서는 필수이기 떄문에 변환을 하더라도 이게 원래 코드 어디서 왔는지 추적이 가능함.\"}]\n14:[\"$\",\"ol\",null,{\"start\":\"3\",\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"Dialect는 무엇일까?\\n언어 / 도메인의 개념을 MLIR에 꽂아 넣는 플러그인 묶음임.\"}],\"\\n\"]}]\n15:[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"고유 namespace를 갖고 (toy. 같은 접두사)\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"그 안에 operations, types, attributes 등을 등록함\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"그래서 MLIR이 그 의미를 알고 검증, 변환, 최적화를 할 수 있게 됨.\"}],\"\\n\"]}]\n16:[\"$\",\"p\",null,{\"children\":\"Toy는 그렇기 때문에 ToyDialect 를 정의하고\"}]\n17:[\"$\",\"pre\",null,{\"children\":[\"$\",\"code\",null,{\"children\":\"context.loadDialect\u003cToyDialect\u003e();\\n\"}]}]\n18:[\"$\",\"p\",null,{\"children\":\"이런 식으로 MLIRContext에 로딩해서 써먹을 수 있다.\"}]\n19:[\"$\",\"ol\",null,{\"start\":\"4\",\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"그런데 등록 안해도 MLIR은 돌아갈 수 있다. (Opaque API)\\nMLIR은 신기하게도 dialect 를 등록하지 않아도 \\\"toy.transpose\\\" 같은 텍스트 IR을 그냥 구조적으로만 파싱해서 round-trip(읽고-\u003e다시 출력) 가능.\\n단점은 의미를 모르니까 검증을 제대로 못하고, 말도 안되는 IR도 통과할 수 있다는 점이다.\"}],\"\\n\"]}]\n1a:[\"$\",\"pre\",null,{\"children\":[\"$\",\"code\",null,{\"children\":\"%0 = \\\"toy.print\\\"() : () -\u003e tensor\u003c2x3xf64\u003e\\n\"}]}]\n1b:[\"$\",\"p\",null,{\"children\":\"이런건 print가 operand도 없고, 리턴도 하면 안되는데 등록하면 MLIR은 그냥 모르는 op 니까 대충 넘어감.\\n따라서 무조건 dialect+operation 을 등록해서 의미를 알려줘야 한다.\"}]\n1c:[\"$\",\"ol\",null,{\"start\":\"5\",\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"toy.constant 같은 operation을 정식으로 정의하는 것\\n시작에 앞서 literal은 소스 코드에 '그 값 자체' 를 직접 써놓은 것을 말함. 계산 결과가 아니라 그냥 값 자체\"}],\"\\n\"]}]\n1d:[\"$\",\"pre\",null,{\"children\":[\"$\",\"code\",null,{\"children\":\"[1, 2, 3]\\n[[1, 2, 3], [4, 5, 6]]\\n\"}]}]\n1e:[\"$\",\"p\",null,{\"children\":\"이렇게 계산이나 변수를 통해 오지 않은, 코드에 하드코딩된 텐서 값이 literal tensor\\ntoy에서 literal tensor 를 SSA 값으로 만드는 op:\"}]\n1f:[\"$\",\"pre\",null,{\"children\":[\"$\",\"code\",null,{\"children\":\"%4 = \\\"toy.constant\\\"() {value = dense\u003c1.0\u003e : tensor\u003c2x3xf64\u003e} : () -\u003e tensor\u003c2x3xf64\u003e\\n\"}]}]\n20:[\"$\",\"p\",null,{\"children\":\"입력 operand는 없는데, 대신 value 라는 attribute에 tensor 값이 들어있다. (dense elements)\\n결과로 tensor 하나를 뱉음.\"}]\n21:[\"$\",\"ol\",null,{\"start\":\"6\",\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":[\"Operation은 C++로 만들 수도 있고, TableGen(ODS) 로도 만들 수가 있음.\\n(1) C++ 로 직접 만들면\\nclass ConstantOp : public mlir::Op \",[\"$\",\"code\",null,{\"children\":\"\u003c...traits...\u003e { ... }\"}],\"\\n장점은 자유도가 있다는 점이고, 단점은 보일러플레이트(Boilerplate)가 많다는 점이다.\\n보일러플레이트는 매번 거의 똑같이 써야 하는 의미는 없고 형식만 중요한 코드임. (새로운 정보가 없다.)\"]}],\"\\n\"]}]\n22:[\"$\",\"p\",null,{\"children\":\"(2) TableGen 으로 선언적으로 만들면\\nODS (Opera"])</script><script>self.__next_f.push([1,"tion Definition Specification) 을 통해 핵심 의미만 남고, 반복적이고 형식적인 코드는 자동 생성된다.\"}]\n23:[\"$\",\"pre\",null,{\"children\":[\"$\",\"code\",null,{\"children\":\"def ConstantOp : Toy_Op\u003c\\\"constant\\\"\u003e {\\n  let arguments = (ins F64ElementsAttr:$value);\\n  let results = (outs F64Tensor);\\n}\\n\"}]}]\n24:[\"$\",\"p\",null,{\"children\":\"자동으로\"}]\n25:[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"접근자(accessor) 가 생성되고 op.value() 같은\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"trait이 일부 자동 추론이 되고 (operand는 0개이고, result는 1개인것 같은)\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"검증 로직도 상당 부분 자동 생성이 된다.\\n추가적으로\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"summary/description 써서 문서 자동 생성도 가능하고\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"hasVerifier = 1; 로 커스텀 검증도 붙일 수가 있음.\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"builders 로 ConstantOp::build(...) 생성 규칙을 만들 수가 있음.\\nODS는 \\\"Operation 명세서를 쓰면 C++ 코드가 자동으로 생성되는 설계도 시스템인 셈.\\\"\"}],\"\\n\"]}]\n26:[\"$\",\"ol\",null,{\"start\":\"7\",\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"Op vs Operation\"}],\"\\n\"]}]\n27:[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"Operation* : 모든 op를 담는 범용 박스 (opaque)\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"ConstantOp 같은 Op 클래스 : 그 박스를 감싼 타입 안전한 래퍼 (like smart pointer)\"}],\"\\n\"]}]\n28:[\"$\",\"pre\",null,{\"children\":[\"$\",\"code\",null,{\"children\":\"ConstantOp op = llvm::dyn_cast\u003cConstantOp\u003e(operation);\\n\"}]}]\n29:[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"mlir::Operation* = 모든 op의 공통 실체\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"ConstantOp = 그 실체를 특정 op 타입으로 다루기 위한 타입 안전 래퍼\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":[\"dyn_cast \",[\"$\",\"code\",null,{\"children\":\"\u003cConstantOp\u003e\"}],\" (operation) = 이게 ConstantOp 맞으면 래퍼로 변환\"]}],\"\\n\"]}]\n2a:[\"$\",\"p\",null,{\"children\":\"즉 mlir::Operation* operation이 실제로 toy.constant 같은 ConstantOp에 해당하는 op라면, 그걸 ConstantOp 래퍼로 감싸서 돌려주거나, 아니면 실패(null 같은 값)로 돌려주라는 의미임.\"}]\n2b:[\"$\",\"ol\",null,{\"start\":\"8\",\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"Toy 코드가 MLIR에서는 어떻게 보이는 것인가?\"}],\"\\n\"]}]\n2c:[\"$\",\"pre\",null,{\"children\":[\"$\",\"code\",null,{\"children\":\"var b\u003c2,3\u003e = [1,2,3,4,5,6];\\n\"}]}]\n2d:[\"$\",\"p\",null,{\"children\":[\"MLIR에서는 이런 흐름으로\\n(1) 1D literal을 constant로 만들고 (tensor\",[\"$\",\"code\",null,{\"children\":\"\u003c6xf64\u003e\"}],\")\"]}]\n2e:[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":[\"참고로 컴파일러에서는 constant랑 literal 이 다름. literal은 소스 코드에 쓰인 값이고, constant는 IR에서 상수로 표현 된 값임.\\n따라서 Literal -\u003e (컴파일 과정) -\u003e Constant\\n(2) reshape 로 tensor \",[\"$\",\"code\",null,{\"children\":\"\u003c2x3xf64\u003e\"}],\" 로 바꾼다.\"]}],\"\\n\"]}]\n2f:[\"$\",\"pre\",null,{\"children\":[\"$\",\"code\",null,{\"children\":\"%2 = toy.constant dense\u003c[...]\u003e : tensor\u003c6xf64\u003e\\n%3 = toy.reshape(%2 : tensor\u003c6xf64\u003e) to tensor\u003c2x3xf64\u003e\\n\"}]}]\n30:[\"$\",\"p\",null,{\"children\":\"즉, AST에서 \\\"선언\\\"으로 보였던 게 MLIR 에서는 constant + reshape 라는 명시적 op 시퀀스로 풀려나오는 것.\"}]\n31:[\"$\",\"ol\",null,{\"start\":\"9\",\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"왜 출력이 처음에는 지저분 하고 나중에는 깔끔해 질까?\\n처음에는 \\\"generic assembly format\\\" 이기 때문에\"}],\"\\n\"]}]\n32:[\"$\",\"pre\",null,{\"children\":[\"$\",\"code\",null,{\"children\":\"\\\"toy.print\\\"(%5) : (tensor\u003c*xf64\u003e) -\u003e ()\\n\"}]}]\n33:[\"$\",\"p\",null,{\"children\":\"쓸데 없는 괄호 / 타입 / 화살표가 붙어있음\\n이 op에 custom assembly format을 지정하면\"}]\n34:[\"$\",\"pre\",null,{\"children\":[\"$\",\"code\",null,{\"children\":\"toy.print %5 : tensor\u003c*xf64\u003e\\n\"}]}]\n35:[\"$\",\"p\",null,{\"children\":\"사람이 읽기 좋게 줄일 수가 있음.\"}]\n36:[\"$\",\"ul\",null,{\"chi"])</script><script>self.__next_f.push([1,"ldren\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"C++ 에서 pint() / parse() 를 직접 구현하거나\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"TableGen 에서 assemblyForamt = \\\"...\\\"; 로 선언적으로 지정 할 수 있음.\"}],\"\\n\"]}]\n37:[\"$\",\"p\",null,{\"children\":\"=====================================================================\"}]\n38:[\"$\",\"p\",null,{\"children\":\"긴 내용을 정리해 보자면\"}]\n39:[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"MLIR은 확장 가능한 IR 프레임워크이고\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"이 확장의 단위는 Dialect 이다.\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"Dialect 안에서 Operation을 정의해 의미 / 검증 / 빌더 / 출력 포맷을 제공한다.\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"등록 안 해도 \\\"구조적으로\\\" 는 다룰 수 있지만, 제대로 하려면 등록해야 한다.\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"TOy AST -\u003e Toy Dialect ops -\u003e 더 낮은 레벨로 점점 lowering 이 가능해 진다.\"}],\"\\n\"]}]\n"])</script><script>self.__next_f.push([1,"a:[[\"$\",\"meta\",\"0\",{\"charSet\":\"utf-8\"}],[\"$\",\"meta\",\"1\",{\"name\":\"viewport\",\"content\":\"width=device-width, initial-scale=1\"}]]\n"])</script><script>self.__next_f.push([1,"3a:I[27201,[\"/blog/_next/static/chunks/ff1a16fafef87110.js\",\"/blog/_next/static/chunks/247eb132b7f7b574.js\"],\"IconMark\"]\nc:[[\"$\",\"title\",\"0\",{\"children\":\"MLIR Tutorial md2 에 대하여 - My Blog\"}],[\"$\",\"meta\",\"1\",{\"name\":\"description\",\"content\":\"Traversing the AST to emit a dialect in MLIR, introducing base MLIR concepts. Here we show how to start attaching semantics to our custom operations in MLIR.\"}],[\"$\",\"link\",\"2\",{\"rel\":\"icon\",\"href\":\"/blog/favicon.ico?favicon.0b3bf435.ico\",\"sizes\":\"256x256\",\"type\":\"image/x-icon\"}],[\"$\",\"$L3a\",\"3\",{}]]\n8:null\n"])</script></body></html>
