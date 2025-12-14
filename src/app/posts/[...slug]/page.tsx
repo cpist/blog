@@ -13,7 +13,7 @@ export async function generateMetadata(props: { params: Promise<{ slug: string[]
   const post = getPostBySlug(joined);
   if (!post) return {};
   return {
-    title: `${post.frontmatter.title} - My Blog`,
+    title: `${post.frontmatter.title} - CPIST's blog`,
     description: post.frontmatter.summary ?? "",
   };
 }

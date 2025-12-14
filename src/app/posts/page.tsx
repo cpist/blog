@@ -1,7 +1,7 @@
 import PostList from "@/components/PostList";
 import { getAllPosts } from "@/lib/posts";
 
-export const metadata = { title: "Posts - My Blog" };
+export const metadata = { title: "Posts - CPIST's blog" };
 
 export default function PostsPage() {
   const posts = getAllPosts();

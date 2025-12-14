@@ -35,7 +35,7 @@ function getAllPostEntries(): { category: string; filename: string; fullPath: st
 
   for (const category of cats) {
     const dir = path.join(POSTS_DIR, category);
-    const files = fs.readdirSync(dir).filter((f) => f.endsWith(".mdx"));
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith(".mdx") && !f.toLowerCase().startsWith('readme'));
     for (const filename of files) {
       out.push({ category, filename, fullPath: path.join(dir, filename) });
     }

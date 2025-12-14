@@ -6,7 +6,7 @@ export async function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }: { params: { tag: string } }) {
-  return { title: `#${params.tag} - My Blog` };
+  return { title: `#${params.tag} - CPIST's blog` };
 }
 
 export default function TagPage({ params }: { params: { tag: string } }) {

@@ -3,7 +3,7 @@ import PostList from "@/components/PostList";
 import { getAllCategories, getAllPosts, getAllTags } from "@/lib/posts";
 
 export const metadata = {
-  title: "My Blog",
+  title: "CPIST's blog",
   description: "Next.js + MDX blog",
 };
 
@@ -31,7 +31,7 @@ export default function HomePage() {
         {categories.map((c) => (
           <Link
             key={c}
-            href={`/${encodeURIComponent(c)}`}
+            href={`/${encodeURIComponent(c)}/`}
             style={{
               border: "1px solid #ddd",
               borderRadius: 999,
@@ -48,7 +48,7 @@ export default function HomePage() {
       <PostList posts={posts} />
 
       <div style={{ marginTop: 18 }}>
-        <Link href="/posts">→ All posts</Link>
+        <Link href="/posts/">→ All posts</Link>
       </div>
 
       <h2 style={{ marginTop: 32 }}>Tags</h2>
@@ -56,7 +56,7 @@ export default function HomePage() {
         {tags.map(({ tag, count }) => (
           <Link
             key={tag}
-            href={`/tags/${encodeURIComponent(tag)}`}
+            href={`/tags/${encodeURIComponent(tag)}/`}
             style={{
               border: "1px solid #ddd",
               borderRadius: 999,
