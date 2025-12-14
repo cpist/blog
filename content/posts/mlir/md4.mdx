@@ -1,0 +1,131 @@
+---
+title: "MLIR Tutorial md4 에 대하여"
+date: "2025-11-02"
+summary: "Writing generic dialect-independent transformations with Interfaces. Here we will show how to plug dialect specific information into generic transformations like shape inference and inlining."
+tags: ["mlir", "dialect"]
+draft: false
+---
+
+1) 다 똑같은데 왜 새로 짜야 하는가
+어떤 dialect 이든 함수 인라이닝, shape 추론, 단순 최적화 로직을 씀
+- 그렇다는 것은 Toy용 인라이너, 또 다른 dialect용 인라이너.. 이런걸 계속 코드 복붙하는건 별로이지 않겠는가.
+
+2) Interface를 쓰자.
+Interface는 콘센트 규격 같은 것임.
+    - MLIR이 제공하는 범용 알고리즘 (inliner, shape 추론)
+    - Dialect는 자기 콘센트가 어떻게 생겼는지만 알려주면, MLIR이 알아서 꽂아서 사용하는 것
+
+3) Function inlining 
+
+```
+toy.generic_call @multiply_transpose(...)
+
+룰 inline 해서
+
+toy.transpose
+toy.mul
+
+와 같이 직접 펼치는 것
+```
+
+```
+struct ToyInlinerInterface : public DialectInlinerInterface {
+  bool isLegalToInline(...) const final { return true; }
+};
+```
+
+이런식으로 DialectInlinerInterface를 구현하여 Toy에서는 다 인라인 해도 안전하다는 것을 보여줌. 
+
+이건 함수다 / 이건 호출이다를 표시하기
+inliner가 묻는 내용임.
+
+그래서 
+- 함수는 Interface로 CallableOpInterface를
+- 호출은 Interface로 CallOpInterface 를 붙여줌.
+- toy.func, toy.generic_call 에 각각 추가함.
+
+근데 inlining 이 잘 안될수가 있음 - 타입이 살짝 다르기 때문에
+
+```
+call: tensor<2x3xf64>
+func arg: tensor<*xf64>
+```
+
+MLIR inliner로서는 중간에 cast가 필요하다고 생각함.
+
+4) 그래서 toy.cast 가 있는 것
+toy.cast는 데이터는 그대로, 모양(shape) 만 바꾸는 것.
+
+```
+%2 = toy.cast %1 : tensor<2x3xf64> to tensor<*xf64>
+
+그리고 MLIR에 알림.
+
+Operation *materializeCallConversion(...) {
+  return CastOp::create(...);
+}
+```
+
+의미는 타입이 안 맞으면 내가 cast를 만들어 주겠다는것
+- inliner 가 성공하게 된다.
+
+5) Shape inference
+모든 함수가 main에 inline 되었지만, 아직도 이런게 남음.
+
+```
+tensor<*xf64>
+```
+
+* 여기서 Interface는 각 op가 자기 결과 shape 계산법을 알고 있게 하는 것임.
+
+```
+OpInterface<"ShapeInference">
+  void inferShapes();
+
+void MulOp::inferShapes() {
+  getResult().setType(getLhs().getType());
+}
+```
+
+이를 통해 곱셈 결과 shape는 입력과 같다는게 명확해짐.
+
+6) 정리해 보자면 Shape Inference Pass는
+(1) 아직 shape 모르는 op 들을 모아서 리스트
+(2) 입력 shape 다 아는 op를 하나 고름
+(3) inferShapes() 를 호출
+(4) 결과 shape을 확정 -> 다음 op 가능
+(5) 반복 진행
+
+만약 interface 가 없다면?
+너는 shape 추론을 못하고 -> 에러로
+
+결과적으로 
+
+```
+%2 = toy.mul %1, %1 : tensor<*xf64>
+
+에서
+
+%2 = toy.mul %1, %1 : tensor<3x2xf64>
+
+로 된다.
+```
+
+컴파일러가 shape을 완벽하게 이해하고, 코드 생성을 가능하게 한다.
+
+=====================================================================
+
+정리해 보자면
+
+- Interface는 이 op/dialect는 이런 능력이 있다는 것을
+    - Dialect Interface 는 dialect의 전체 성질
+    - Op Interface는 개별 연산 성질
+- Inliner는 인터페이스만 보고 함수 인라이닝
+- ShapeInference는 op 스스로 shape를 계산
+
+
+
+
+
+
+
