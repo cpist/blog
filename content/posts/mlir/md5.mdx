@@ -1,0 +1,163 @@
+---
+title: "MLIR Tutorial md5 에 대하여"
+date: "2025-11-08"
+summary: "Partially lowering to lower-level dialects. We'll
+    convert some of our high level language specific semantics towards a generic
+    affine oriented dialect for optimization."
+tags: ["mlir", "dialect"]
+draft: false
+---
+
+1) 왜 Affine 이라는게 필요한가?
+다루고 있는 Toy는 수학계산하기 좋다. tensor 를 기반으로 하는 값 개념이다. (메모리에 없는)
+- 그런데 Affine은 반복문 & 배열 최적화에 특화되어 있다.
+- memref 기반이고 이말인 즉슨 실제 메모리 비퍼이다.
+- 따라서 계산-heavy 부분은 Affine 으로 / 출력(toy.print) 같은 건 ` -> ` 나중에 LLVM에서 처리하면 된다.
+
+일단 Affine은 MLIR의 dialect 중 하나임. 근데 최적화를 위해 설계된 중간 단계 전용 dialect 임.
+
+```
+affine::AffineDialect
+
+기본적으로
+affine.for
+affine.if
+afffine.load
+affine.store
+```
+
+LLVM으로 바로 내려갈 수 없는 이유는
+- 포인터 연산이 너무 자유롭고
+- 루프 구조 분석이 어렵고
+- 이게 같은 배열을 접근하는지 추적이 힘든 LLVM의 특징 때문임.
+
+Affine은 메모리 접근이 수식으로 딱 떨어지고, 컴파일러가 안전하다는 것을 보장하게 해줌.
+
+```
+// toy의 이 코드를
+%y = toy.mul %x, %x
+
+// Affine 에서는
+affine.for i ...
+  affine.for j ...
+    %v = affine.load %buf[i, j]
+    %r = arith.mulf %v, %v
+    affine.store %r, %out[i, j]
+```
+
+이렇게 하여 연산 구조, 메모리 패턴, 반복 범위를 컴파일러 눈에 다 보이게 해줌.
+루프와 메모리 접근을 수학적으로 깔끔하게 표현해서 컴파일러가 마음껏 최적화할 수 있게 만든 dialect 라는 것이다.
+
+2) 핵심 개념 1 : Dialect Conversion
+MLIR에는 언어간 변환을 담당하는 DialectConversion Framework이 있다.
+이를 쓰기 위해서는 3가지가 필요하다.
+(1) Conversion Target
+어디 까지 변환되면 성공인가? 즉 변환이 끝난 뒤 IR에 남아있는 op들이 이 집합(legal) 안에 있으면 성공이고, 하나라도 밖의 op가 있으면 실패이다.
+  - 허용되는 것은 Affine, Arith, Func, memref
+  - 금지 되는 것은 Toy dialect 전체
+  - 예외는 toy.print는 부분 lowering으로 남겨둠. 여기서도 toy.print의 입력은 tensor는 안되고 memref 여야 한다.
+
+(2) Rewrite Patterns 
+Toy 연산을 Affine으로 어떻게 바꿀까?
+
+```
+toy.transpose
+   ↓
+affine.for + affine.load + affine.store
+```
+
+여기서 transpose는 중첩 loop 돌면서 인덱스를 뒤집어서 load / store 한다는 것을 알 수 있다.
+좀더 자세히 살펴보자면 Toy는 아래와 같이 개념적 연산을 진행함. (행과 열을 바꾸는)
+
+```
+%out = toy.transpose %in : tensor<2x3> -> tensor<3x2>
+```
+
+여기서는 내부적으로 loop도 없고, 메모리 접근도 없으며, 그냥 값이 바뀐다는 선언임.
+그런데 Affine에서는 transpose 같은 고수준 연산이 없기 때문에 이를 직접 말해줘야 함.
+
+```
+affine.for i = 0 to 3 {
+  affine.for j = 0 to 2 {
+    ...
+  }
+}
+
+// transpose의 규칙
+out[i][j] = in[j][i]
+
+// 그렇기에 아래처럼
+%v = affine.load %input[j, i]
+affine.store %v, %output[i, j]
+
+// 코드에서는 실제 아래처럼 쓰임
+SmallVector<Value, 2> reverseIvs(llvm::reverse(loopIvs));
+return affine::AffineLoadOp::create(builder, loc, input, reverseIvs);
+```
+
+인덱스를 뒤집는 다는건, loop 변수 순서는 그대로 쓰지만, load 할때만 index 순서를 거꾸로 쓴다는 것.
+
+
+(3) Type Converter
+이 챕터에서는 안씀.
+다만 tensor ` -> ` memref 개념은 중요하다는 것. (이건 OpConversionPattern 안에서 명시적으로 처리함.)
+tensor ` -> ` memref는 새 버퍼를 만들고 값을 채우는 것.
+
+3) Partial Lowering (부분 변환)
+모든 Toy 연산을 없애지 않고
+- 계산 ` -> ` Affine 변환
+- 출력 (toy.print) 는 그대로 두었다. (위에서도 나왔던)
+
+```
+// 아직 안바뀐 Toy 연산이 있어도 괜찮다는 것
+applyPartialConversion(...)
+```
+
+4) tensor ` <-> ` memref를 어떻게 섞는가
+toy.print는 원래 tensor 만 받지만, 우리는 memref를 쓰고 있는 상황
+
+선택지는 3가지이다.
+(1) memref 를 tensor로 복사하는 것은 느리고 최적화가 안되있음.
+(2) 새로운 toy.print_memref를 만드는 것은 번거롭다.
+(3) toy.print가 memref도 받게 하는 것이다. (이 챕터에서 사용한 방법)
+
+```
+// 현실적인 Toy dialect
+AnyTypeOf<[F64Tensor, F64MemRef]>
+```
+
+5) Toy 코드에서 Affine 으로 낮춘 예제 한개를 더 보자.
+```
+%2 = toy.transpose(%0)
+%3 = toy.mul %2, %2
+toy.print %3
+```
+
+이를 Affine으로 낮추면
+- tensor는 memref.alloc 으로
+- 연산은 affine.for 로
+- 곱셈은 affine.load + arith.mulf 로
+- 출력은 toy.print memref 로
+
+6) 첫 변환 결과는 다소 애매하다.
+불필요한 버퍼를 썼고, 같은 값을 여러번 load 했기 때문이다.
+이를 해결하는 방법은 LoopFusion 과 AffineScalarReplacement 이다.
+이 결과 루프가 합쳐지고, load 중복이 제거 되고, 메모리 사용이 감소된다.
+
+=====================================================================
+
+정리해 보자면
+
+- Partial lowering 의 개념과
+- tensor -> memref의 전환 이유
+- Affine dialect의 최적화 파워와
+- 중간 단계 dialect의 가치에 대해 다루었다.
+
+
+
+
+
+
+
+
+
