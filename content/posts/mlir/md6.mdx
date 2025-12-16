@@ -11,6 +11,32 @@ draft: false
 1) 이제 Toy 언어 -> MLIR -> LLVM -> 실제 실행되는 코드 (JIT) 로 간다.
 진짜 프로그램을 돌리는 것.
 
+여기서 LLVM으로 낮춘다는 말을 쓰느데
+LLVM은 컴파일러 인프라이고, MLIR이 LLVM이 사용할 수 있는 IR을 만들어 주는 것이다.
+즉 LLVM 인프라가 처리할 수 있는 IR 형태로 바꿔주는 것이 MLIR
+
+```
+Toy / TensorFlow / PyTorch / DSL
+        ↓
+     MLIR (여러 dialect)
+        ↓
+   MLIR LLVM dialect
+        ↓
+     LLVM IR (.ll)
+        ↓
+   LLVM Optimizer + Backend
+        ↓
+    실행 파일 / JIT 실행
+```
+
+그리고 LLVM의 구성요소도 짤막하게 정리해 보자면
+
+- LLVM IR : 저수준 중간 표현
+- Optimizer : IR 최적화
+- CodeGen : IR `->` 머신 코드
+- JIT : 즉석 컴파일
+- Backend : x86, ARM 등 타깃 아키텍쳐에 맞게 LLVM IR 을 머신 코드로 변환
+
 2) Step 1 : Toy -> LLVM (Lowering)
 이전 장에서 다룬 내용을 통해 toy 연산은 이미 affine / scf / arith 같은 표준 MLIR로 바꿔놓았다.
 남은건 toy.print 이다.
@@ -48,6 +74,33 @@ i32 printf(i8*, ...)
 - cf -> LLVM
 - toy.print 전용 lowering 패턴
 즉 모든 연산을 LLVM으로 변환 가능하다는 것.
+이 것들은 dialect를 다른 dialect로 바꾸는 변환 패턴임.
+dialect 는 연산(op) 와 타입(type) 의 언어 묶음 이었음. (아래 예시와 같이)
+
+```
+affine dialect → affine.for, affine.load
+scf dialect → scf.for, scf.if
+arith dialect → arith.addf, arith.mulf
+llvm dialect → llvm.load, llvm.call
+```
+
+즉 어떤 연산들이 있는지를 정의하는 것.
+그리고 이 연산을 다른 연산으로 바꾸는 것이 바로 Conversion pattern (Rewrite Pattern)
+
+```
+affine.for → scf.for
+scf.for → cf.br + 블록
+arith.addf → llvm.fadd
+func.func → llvm.func
+
+MLIR 코드에서는 아래와 같이 Conversion 레시피 묶음을 등록함.
+populateAffineToStdConversionPatterns(...)
+populateSCFToControlFlowConversionPatterns(...)
+populateArithToLLVMConversionPatterns(...)
+populateFuncToLLVMConversionPatterns(...)
+```
+
+대부분의 dialect 에서 자기 자신을 LLVM으로 낮추는 변환 패턴을 함께 제공하지만, dialect != conversion pattern이다.
 
 (4) Full Conversion
 
