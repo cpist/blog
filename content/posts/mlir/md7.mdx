@@ -1,0 +1,134 @@
+---
+title: "MLIR Tutorial md7 에 대하여"
+date: "2025-11-15"
+summary: "Extending Toy: Adding support for a composite type.
+    We'll demonstrate how to add a custom type to MLIR, and how it fits in the
+    existing pipeline."
+tags: ["mlir", "dialect"]
+draft: false
+---
+
+1) Toy 언어에 Struct를 추가할 때
+이전까지는 Toy 에서는 숫자와 텐서만 다루었으나,
+이번 챕터에서는 여러 값을 묶을 수 있는 struct를 추가함.
+
+```
+struct MyStruct {
+  var a;
+  var b;
+}
+```
+
+- 여러 변수를 하나로 묶고
+- 멤버 접근은 value.a 처럼 점(.) 사용
+- `{ ... }` 로 한번에 초기화 가능
+
+```
+Struct value = {tensor1, tensor2};
+```
+
+2) MLIR에는 struct가 없지만, 만들수 있다.
+당연히 MLIR에는 우리가 원하는 struct type이 없음.
+그렇기 떄문에 직접 커스텀 타입 (StructType) 을 만든다.
+
+- struct는 사실 타입들의 묶음이다.
+- 이름이나 멤버 이름은 Toy AST 에서만 필요하다.
+- MLIR 에서는 타입 리스트만 저장한다.
+
+```
+!toy.struct<tensor<*xf64>, tensor<*xf64>>
+```
+
+3) TypeStorage: 진짜 데이터는 여기에 있다.
+MLIR의 타입은 두 겹 구조로 되어 있음.
+- StructType: 사용자가 보는 타입
+- StructTypeStorage: 실제 데이터 저장 + uniquing 담당
+
+Storage는 
+- 이 struct 타입이 예전에 만든 거랑 똑같은지
+- 같으면 재사용, 다르면 새로 생성한다.
+- 메모리 절약과 타입 비교가 빠르다.
+
+4) ODS에 등록해서 공식 타입 만들기
+
+ODS(TableGen) 에 등록시
+- 연산 정의에서 StructType 사용 가능
+- 자동으로 여러 유틸 함수가 생성된다.
+
+```
+def Toy_StructType :
+  DialectType<Toy_Dialect, CPred<"isa<StructType>($_self)">>;
+```
+Tensor 처럼 자연스럽게 쓸 수 있음.
+
+5) MLIR 텍스트로 읽고 쓰게 만들기
+- 타입을 만들었으면 프린트 & 파싱도 해야함.
+
+```
+// 이게 정한 문법이라면
+!toy.struct<type1, type2, ...>
+
+!toy.struct<tensor<*xf64>, tensor<*xf64>>
+```
+- parseType: 텍스트 -> 타입
+- printType: 타입 -> 텍스트
+이제 .mlir 파일로 왕복이 가능해짐.
+
+6) struct 전용 연산도 추가
+* toy.struct_constant
+- struct 값을 통째로 상수로 생성
+```
+%0 = toy.struct_constant [attr1, attr2] : !toy.struct<...>
+```
+
+* toy.struct_access
+- struct에서 특정 원소를 꺼내는 것
+```
+%1 = toy.struct_access %0[0] : !toy.struct<...> -> tensor<...>
+```
+
+Toy 코드의 value.a, value.b 가 바로 이것으로 변환이 된다.
+
+7) 최적화 (상수 접기)
+
+만약 struct 안이 전부 상수라면
+```
+struct_constant + struct_access
+->
+그냥 tensor constant
+```
+
+이를 위해서
+- fold() 함수를 구현하고
+- materializeConstant를 Override 함.
+이를 통해 결과적으로 LLVM 까지 깔끔하게 코드 생성을 가능하게 함.
+
+최종 결과로
+```
+// Toy 코드
+Struct value = {...};
+var c = multiply_transpose(value);
+
+// MLIR
+toy.struct_access
+toy.transpose
+toy.mul
+
+// 최적화 후
+toy.constant
+toy.transpose
+toy.mul
+```
+struct는 컴파일 타임에 사라지고 성능만 남음.
+=====================================================================
+
+이 장의 내용을 요약해 보자면
+- MLIR은 직접 타입도 만들 수 있고
+- 언어 기능 추가라는 것은 프론트엔드 + 타입 시스템 + IR + 최적화의 콜라보 라는 점
+- struct도 결국은 잘 정의된 데이터 묶음이다.
+
+
+
+
+
+
