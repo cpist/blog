@@ -1,0 +1,150 @@
+---
+title: "MLIR Transform Tutorial Ch 2 에 대하여"
+date: "2025-11-23"
+summary: "Adding a Simple New Transformation Operation"
+tags: ["mlir", "transform"]
+draft: false
+---
+
+1) 확장(extension) 이 필요한 이유
+MLIR의 Trnasform dialect는 IR을 직접 바꾸는 메타 IR 이다.
+그런데
+- 모든 변환을 upstream Transform dialect에 넣을수는 없고
+- out-of-tree dialect 전용 변환도 많다.
+- 실험적이거나 프로젝트 한정 변환도 있음.
+
+* 그래서 Transform dialect 는 "확장(extension)" 이라는 플러그인 구조를 제공함
+일종의 게임으로 치면 모드 같은 것임. 본체 코드는 안고치고, 새로운 기술을 추가하는 방법
+
+2) Transform Dialect Extension 은?
+Extension은 다음과 같은 특징을 가짐.
+- `TransformDialectExtension<T>` 를 상속함
+- dialect가 로드 될 때 자동으로 함께 로드가 된다.
+- 새로운 transform operation 들을 등록할 수 있음.
+- 필요한 dialect 들을 의존(dependent) 또는 생성(generated) 으로 선언
+
+* Dependent dialect - transform op 정의에 직접 쓰는 타입 / 어트리뷰트
+* Generated dialect - 변환 실행 결과로 생길 수 있는 op들의 dialect
+
+- 예제에서는 scf, func dialect를 generated dialect 로 선언
+(변환 결과로 loop나 func.call이 생기기 때문)
+
+3) Extension 골격 코드
+```
+class MyExtension
+  : public transform::TransformDialectExtension<MyExtension> {
+public:
+  using Base::Base;
+  void init();
+};
+```
+
+init() 에서 하는 3가지
+- (선택) dependent dialect 선언
+- generated dialect 선언
+- transform op 등록
+
+```
+void MyExtension::init() {
+  declareGeneratedDialect<scf::SCFDialect>();
+  declareGeneratedDialect<func::FuncDialect>();
+
+  registerTransformOps<
+    // ODS로 정의한 op들
+  >();
+}
+```
+
+4) Transform Operation 도 결국은 "Op" (ODS 사용)
+Transform op 정의는 일반 dialect op와 완전히 동일하게 ODS(TableGen) 로 함.
+
+Transform op의 필수 인터페이스
+* TransformOpInterface : 실제 변환을 수행 (apply)
+* MemoryEffectsOpInterface : 핸들과 payload IR 에 대한 side-effect 설명
+
+이게 없으면 Transform interpreter가 assert로 죽음
+
+5) 예제 케이스 my.change_call_target
+이 op는 "Transform handle"이 가리키는 func.call 들의 callee를 문자열로 지정한 심볼 이름으로 바뀜
+
+ODS 정의의 핵심
+```
+def ChangeCallTargetOp :
+  Op<Transform_Dialect, "my.change_call_target",
+     [DeclareOpInterfaceMethods<TransformOpInterface>,
+      DeclareOpInterfaceMethods<MemoryEffectsOpInterface>]> {
+```
+
+입력은 
+- %call: transform handle
+- "new_target" : 새 callee 이름 (string)
+
+출력은
+- 없음 (payload를 in-place로 수정)
+
+실패 정책은
+- handle이 func.call 이 아니면 -> silenceable failure
+
+6) apply() 는 변환의 핵심
+apply()는 Transform dialect의 규칙을 철저히 따름
+
+apply의 입력
+- TransformRewriter &rewriter : IR 수정은 반드시 이걸로만
+- TransformResults &results : 새 payload handle 결과 연결
+- TransformState &state : transform handle `<->` payload IR 매핑 조회
+
+즉 apply 흐름을 요약하자면
+`handle -> payload ops 조회 -> 타입체크 -> 실제 IR 수정`
+
+```
+auto payload = state.getPayloadOps(getCall());
+
+for (Operation *op : payload) {
+  auto call = dyn_cast<func::CallOp>(op);
+  if (!call)
+    return emitSilenceableError();
+
+  updateCallee(call, getNewTarget());
+}
+```
+
+핵심 개념은
+- payload IR : 실제로 바뀌는 대상 IR
+- transform IR : 어떻게 바꿀지를 적은 메타 IR
+- silenceable failure : 실패했지만 다음 변환은 계속 가능
+
+7) MemoryEffectsOpInterface
+Transform dialect는 side-effect 를 명시하지 않으면 안됨
+```
+void ChangeCallTargetOp::getEffects(...) {
+  onlyReadsHandle(getCall(), effects);
+  modifiesPayload(effects);
+}
+```
+
+- handle은 읽기만 함 (op를 삭제하지 않고 in-place 수정)
+- payload IR은 변경됨
+이 정보로 Transform interpreter는
+- handle 유효성과 transform 순서 안정성을 판단함.
+
+8) 등록의 과정
+```
+void registerMyExtension(DialectRegistry &registry) {
+  registry.addExtensions<MyExtension>();
+}
+```
+
+이걸 main() 에서 호출하면 transform.my.change_call_target 사용이 가능함
+
+9) 실제 Transform IR에서 쓰는 방법
+```
+transform.my.change_call_target %call, "microkernel"
+  : !transform.any_op
+```
+
+- 여기서 %call은 이전 transform op (outline) 가 만들어 준 실제 func.call을 가리키는 handle임.
+- 즉 Transform dialect 는 정확히 특정 call 하나를 찍어서 바꿀 수가 있음.
+
+=====================================================================
+
+요약해 보자면 Transform을 확장해서 실제 IR을 안전하고, 추적가능하고, 실패까지 관리하면서 바꾸는 정식 커스텀 변환을 만드는 전 과정을 다루어 보았다.
