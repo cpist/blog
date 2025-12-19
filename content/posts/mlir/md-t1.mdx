@@ -1,0 +1,229 @@
+---
+title: "MLIR Transform Tutorial Ch 1 에 대하여"
+date: "2025-11-22"
+summary: "Combining Existing Transformations"
+tags: ["mlir", "transform"]
+draft: false
+---
+
+1) Transform IR은 뭘까?
+Transform Dialect란 어떤 IR 연산을, 어떤 순서로, 어떻게 바꿀지를 또 다른 IR로 표현하는 방식이다.
+- Payload IR : 진짜 바꾸고 싶은 코드 (ex: linalg.matmul)
+- Transform IR : "이걸타일링 해라, 저걸 합쳐라" 와 같은 변환 스크립트
+
+2) 핸들 (handle) 의 개념
+Transform IR은 handle을 통해 Payload IR을 조작함.
+handle 의 종류는 다음과 같음
+- operation handle : 특정 연산 (linalg.matmul)
+- value handle : 값
+- parameter : 숫자, 속성 같은 설정 값
+```
+%arg1 : !transform.op<"linalg.matmul">
+```
+- 이 핸들은 matmul 연산만 가리킬 수 있음.
+
+3) 시작점: @__transform_main
+Transform은 항상 여기서 시작함
+```
+transform.named_sequence @__transform_main(...)
+```
+- 마치 C의 main() 함수
+- 어떤 연산을 언제, 어떤 순서로 변환할지 정의
+- 내부는 그냥 "변환을 차례대로 나열" 하는 구조
+* transform.with_named_sequence
+- 이 모듈 안에 transform 시퀀스가 있다는 것을 알려줌.
+
+4) transform 이 실패하였을 때
+Transform 에는 실패 전파(propagate) 모드가 있음.
+* propagate의 경우 
+- 하나라도 실패하면 전체 실패
+- 디버깅 할때는 최고
+
+* suppress
+- 실패는 무시하고 바깥 스크립트는 계속 실행함.
+- 실패해도 괜찮은 변환에 유용함.
+
+5) 디버깅을 어떻게 하는가
+예를 들어서 어떤 연산이 잡혀있는지 확인하고 싶을 때
+```
+transform.debug.emit_remark_at %arg1, "matmul"
+```
+
+컴파일 로그에 아래와 같은 내용이 찍힘
+``
+“이 matmul을 지금 보고 있다!”
+``
+
+6) 실제 변환 : 타일링
+예를 들어 matmul을 타일링 하게 되면
+```
+%loop, %tiled =
+  transform.structured.tile_using_forall %arg1 tile_sizes [4, 32]
+```
+
+그 결과
+- %loop `->` 새로 생긴 scf.forall 루프
+- %tiled `->` 타일된 연산
+
+기존 핸들은 소모(consumed) 된다. 
+여기서 소모라는 것은 transform op가 그 핸들이 가리키던 payload op들을 없애거나(erase) 새로 만들거나(recreate) 해서 기존 참조가 위험해 질때 소비 되었다고 표시함.
+
+- Consumed 로 표시된 operand handle은 그 transform 이후에 쓰면 안된다.
+- 다른 라인, 즉 이후 어떤 위치에서도 재사용 할 경우 UB(정의되지 않은 동작) 이 됨.
+
+이렇게 강하게 막는 이유는
+- 핸들은 본질적으로 "payload op" 에 대한 참조(reference) 인데
+- op가 지워지거나 새로 만들면 참조가 헛것이 될 수 있기 때문
+
+결론적으로 사용했기 떄문에 못쓴다 이런게 아니라 해당 transform 이 payload를 재작성 했기 때문에 못쓰는 것이다.
+참고로 payload IR은 실제로 바꾸고 싶은 IR을 의미함.
+```
+linalg.matmul
+linalg.elementwise
+scf.forall
+tensor.extract_slice
+func.func
+
+func.func @fc_relu(...) {
+  %matmul = linalg.matmul ...
+  %add = linalg.elementwise ...
+  %relu = linalg.elementwise ...
+}
+```
+이런 것들, 변환의 대상이 되는 IR
+
+Transform IR은 payload op를 직접 수정하지 않고, handle을 통해 간접 조작한다.
+
+
+7) 핸들 무효화
+```
+tile_using_forall %arg1
+emit_remark_at %arg1   // 이미 죽은 핸들
+```
+
+- 타일링은 연산을 지우고 새로 만듦
+- 옛날 핸들은 dangling point 상태이다.
+- Expensive checks 모드가 켜져 있을 경우
+- 이 핸들이 무효라는 것을 알려준다. 
+
+무효화 (invalidated) 는 
+해당 handle이 가리키던 payload IR entity(연산 / 값)가 더 이상 그 모습 그대로 존재하지 않아, 이 행들로 접근하면 위험하다는 상태임.
+
+* 예시로 tile_using_forall %arg1 같은 타일링은
+- linalg.matmul 을 그대로 두는게 아니라
+- 슬라이스 / 루프 / 새로운 작은 matmul 형태로 재구성을 함.
+
+그러면 %arg1이 가리키던 그 matmul이 
+- 없어지거나
+- 구조가 바뀌거나
+- 다른 op로 대체될 수 있음.
+
+그렇기 때문에 transform dialect는 안전장치로
+- 이 operand handle은 consumed
+- 그리고 그것과 같은 payload op를 가리키던 다른 핸들도 전부 invalidated 라고 처리한다.
+
+* 참고로 alias(별칭)도 같이 무효가 되는데
+```
+%casted = transform.cast %arg1 : ... to !transform.any_op
+```
+%arg1과 %casted 는 같은 payload op를 참조(alias) 한다.
+원본이 없어지면 둘다 무효가 되는 것은 당연하다. (포인터 복사해도 주소는 같기 때문)
+
+8)  핸들은 복사한다 해도 같이 죽는다.
+```
+%casted = transform.cast %arg1
+```
+
+- %arg1과 %casted 는 같은 연산을 가리킨다.
+- 하나가 무효화 되면 -> 둘다 무효다.
+* 즉 참조(reference) 처럼 생각하면 딱 맞는다.
+
+9) 변환 체이닝
+- 마지막 연산 (RELU) 부터 타일링을 진행함
+- 그 루프 안으로
+    - add 연산을 fuse 하고
+    - matmul도 fuse 한다. 
+
+```
+tile → fuse add → fuse matmul
+```
+
+그 결과
+- 캐시 효율도 올라가고
+- 코드도 깔끔해지고
+- 크기 조절도 자동으로 된다.
+
+* 참고로 fuse를 좀더 자세히 설명해 보자면, 두(혹은 여러) 연산을 같은 루프 안으로 합쳐서, 중간 결과를 밖에 안 만들게 하는 것이다.
+원래 라면
+1. matmul 결과를 큰 tensor에 쓰고
+2. 그 tensor를 다시 읽어서 add 하고
+3. 또 다시 읽어서 max(ReLU) 를 했을거임.
+이 경우 메모리 왕복이 많아짐.
+
+fuse를 하게 되면 
+- ReLU 를 타일링 해서 루프를 만들고
+- 그 루프 안에서 필요한 add, matmul 도 같이 계산하게 끌어들임.
+아래와 같은 방식으로
+```
+for tile ... {
+  tile_matmul()
+  tile_add()
+  tile_relu()
+}
+
+즉,
+
+for each tile:
+  A_tile, B_tile 읽음
+  matmul(tile) → 레지스터/캐시
+  add(tile)    → 바로 이어서
+  relu(tile)   → 바로 이어서
+  결과 tile만 메모리에 씀
+```
+
+이렇게 했을때
+- 중간 텐서를 크게 저장/로드 하지 않고
+- 타일 단위로 바로 다음 연산을 이어서 처리하여 캐시 / 대역폭에서 이득을 볼 수 있다. (하나의 tile 범위에 대해서)
+
+
+10) 더 작은 타일 + 아웃라이닝
+- 4x4 matmul 마이크로 커널이 있다면?
+(1) 다시 타일링을 하고
+(2) 루프를 함수로 outline 한다음
+(3) 나중에 마이크로 커널 호출로 교체를 한다. 
+
+* 주의할 부분이라면
+- outline도 핸들을 소모하고
+- 그 안에 있던 연산 핸들이 전부 무효화 된다.
+
+* Kernel은 DL / 선형대수의 Kernel 개념이 맞음.
+Microkernel 은 
+- 아주 작은 고정 크기 블록 (ex: 4x4 matmul) 을 
+- 어셈블리 / 벤더 intrinsics / 특수 명령어로 최적화해 둔 함수이다.
+    - BLAS 내부, oneDNN, XNNPACK류가 이런 스타일을 많이 씀
+
+* replace 흐름의 경우
+1. 큰 matmul을 타일링 해서 4x4 단위로 쪼개고
+2. 그 4x4 계산을 별도 함수로 outline(= 루프 바디를 함수로 떼어내고)
+3. 그 함수 호출(func.call) 을
+    - microkernel_4x4(...) 같은 특수 호출로 바꾸고 싶다
+즉 outline 된 함수 호출을 마이크로커널 호출로 바꾸는 것임.
+
+* 왜 굳이 outline을 하는가? (outline : 코드 조각을 바깥으로빼서(out) 별도의 함수를 만들어(line을 긋는다.))
+- Transform dialect 에서 "임의의 호출을 내 마음대로 다른 호출로 바꾸기"는 기본 제공이 제한적임.
+- 일단 호출 형태로 만들어 놓으면 (=call)
+- 그 다음단계 (커스텀 transform op 또는 다른패스) 에서 교체하기가 쉬워짐.
+
+최종적으로
+- 호출로 교체한다는 것은 타일된 작은 계산 `->` 특수 최적화 함수 호출로 바꾸어서 성능을 극대화 한다는 것이다.
+
+11) Transform dialect 의 자동 추적
+Transform은 IR 변경을 자동 추적함.
+- 연산 삭제 `->` 핸들에서 자동 제거
+- 연산 교체 `->` 가능한 경우 핸들 자동 갱신
+- 애매하면 `->` 에러로 막아준다.
+이를 통해 몰래 잘못 바꾸는 일을 방지한다.
+
+=====================================================================
+
+요약해 보자면 Transform Dialect는 IR을 바꾸는 과정을 IR로 작성하는 안전한 자동 리팩토링 언어라 할 수 있음.
