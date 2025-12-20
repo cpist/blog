@@ -1,0 +1,182 @@
+---
+title: "MLIR Transform Tutorial Ch H 에 대하여"
+date: "2025-12-06"
+summary: "Reproducing Halide Schedule"
+tags: ["mlir", "transform"]
+draft: false
+---
+
+1) Halide VS MLIR
+Halide의 강점은
+- 계산(what) 과 스케줄(how) 를 완전히 분리했다는 점
+- 같은 계산이라도
+  - split
+  - reorder
+  - vectorize
+  - unroll
+  - compute_at 같은 스케줄만 바꿔서 성능을 극단적으로 끌어 올렸음.
+
+* MLIR의 경우
+- MLIR은 기본적으로 각 연산이 각자 루프를 가진 분산된 형태임.
+- Halide는 여러 연산이 암묵적으로 하나의 큰 루프에 융합된 형태임.
+- 따라서 Halide 스케줄을 MLIR 식으로 흉내 내보는 것이 이 챕터에서 다루는 내용
+
+2) Channeled 2D Convolution + ReLU
+Halide 코드는
+- 입력: input[N][H+2][W+2][CI]
+- 필터: filter[CO][3][3][CI]
+- 연산:
+  1. bias로 초기화
+  2. 3중 reduction (CI, 3x3)
+  3. ReLU
+
+* MLIR 에서는
+- linalg.generic 으로 convolution 재현
+- bias 초기화 / conv / relu가 각각 다른 연산
+- 즉 루프가 완전히 분리되어 있음
+
+루프 구조를 코드로 보자면
+```
+// Halide는 완전 융합 되어 있고
+for n, y, x, c:
+  conv = bias
+  for rz, ry, rx:
+    conv += filter * input
+  relu = max(0, conv)
+
+// Linalg는 완전 분산되어 있음
+for n, y, x, c:
+  init
+for n, y, x, c:
+  conv update
+for n, y, x, c:
+  relu
+```
+
+이러한 차이를 Transform dialect로 다시 합치는 것이 과제이다.
+
+3) Halide 스케줄을 Transform dialect에 Mapping 하자.
+즉 Halide 스케줄 `->` MLIR Transform 에서는
+- split을 tile_using_forall 로
+- reorder를 tile 순서 + interchange로
+- compute_at을 fuse_into_containing_op 로
+- vectorize 를 structured.vectorize_* 로
+- unroll 을 transform.loop.unroll 로 
+
+- MLIR은 암묵 루프를 유지하려 하고
+- Halide는 루프를 적극적으로 쪼개고 재배열 하려 하고
+
+4) ReLU 루프 구조 재현
+Halide가 원하는 형태는 아래와 같음
+```
+for co
+  for n
+    for y
+      for xo
+        for xi
+          for ci
+            relu(...)
+```
+
+MLIR의 경우
+1. 먼저 c 차원을 tile `->` co
+2. 나머지 (n,y,x) 를 tile
+3. forall 루프로 명시적인 루프를 생성
+그 결과
+- scf.forall + 내부 linalg.elementwise
+- Halide와 거의 같은 루프 계층이 생성됨.
+
+5) compute_at: Conv를 ReLU 안으로 밀어 넣는 것
+Halide 
+```
+conv.compute_at(relu, xo)
+```
+
+MLIR은 
+- producer `->` consumer fusion
+- 두 단계:
+  - conv update -> relu 루프에 fuse
+  - bias init -> conv+relu 루프에 fuse
+
+사용한 도구는 
+```
+transform.structured.fuse_into_containing_op
+```
+이렇게 해서 Halide의 한 루프안에 다 있음 구조를 재현할 수 있음.
+
+6) Reduction 루프(rz, ry, rx) 처리
+- reduction은 병렬 forall 이 안됨
+- 이를 해결하기 위해 아래와 같이 함.
+```
+transform.structured.tile_reduction_using_for
+```
+효과는
+- scf.for 로 reduction 루프를 생성하고
+- 내부적으로 partial reduction + combiner를 생성하고
+- fastmath 덕분에 연산 순서 변경도 가능해 진다.
+
+7) 벡터화를 위한 마지막 타일링
+- ci 차원이 vector size (ex :16) 을 유지하려고 한다면
+- 아래와 같이 함.
+```
+tile_sizes = [0, 0, 1, 16]
+```
+이걸 
+- conv
+- bias
+- relu
+- combiner 모두에 적용하는 것
+- vector 화 전에 tensor 형태를 일부러 "16짜리" 로 유지
+
+8) unroll의 함정
+Halide 스케줄은
+- unroll(ci)
+- unroll(xi)
+
+처음에는 transform 단계에서 바로 unroll 하려고 했지만
+이것은 성능에서 완전하게 망했음 (14 GFLOPS, 22% peak)
+
+그 이유는
+- Tensor SSA 모델 + 조기 unroll
+- IR이 너무 길어지고
+- load / fma / store가 섞여서 레지스터 재사용이 불가능해짐
+- 즉 너무 일찍 unroll 하면 컴파일러가 포기해 버림.
+
+9) 이를 해결하기 위한 방법중 하나가 bufferization 이후 unroll
+1. bufferize를 먼저하고
+2. 다시 loop 매칭한 다음
+3. 그 다음 unroll을 하는것 
+
+그 결과
+- Halide와 거의 동일한 어셈블리
+- 실행 시간: ~120ms
+- 성능은 77% of peak
+
+단점은
+- Transform handle의 철학을 약간 거스른 방법임.
+
+10) 그래서 다차원 벡터를 사용함
+`vector<5x64xf32>` 루프 5x4 를 만들고 unroll 한것과 같음
+
+- 굳이 xi/ci 루프를 만들고 unroll 하지 않아도
+- 다차원 벡터 `->` 하드웨어 벡터로 lowering 과정에서 자동 분해함.
+그 결과
+- unroll 단계를 제거하고
+- IR이 훨씬 짧아지고
+- load / broadcast / fma 정렬이 개선됨.
+
+성능 측면에서도
+- ~110ms / 84% of peak / Halide 보다도 약간 빠름
+
+=====================================================================
+
+요약해 보자면
+- Transform dialect는 Schedule DSL의 IR 이라는 점
+- Halide Schedule은 MLIR로 거의 1:1 재현이 가능하다
+- 변환 순서가 성능을 결정함.
+  - unroll이 특히
+- Tensor SSA + 조기 unroll = 성능 최악
+- 다차원 벡터는 "암묵적 unroll + 타일링임"
+- MLIR은 
+  - 덜 건드리고
+  - 나중에 낮은 레벨에서 터뜨릴수록 성능이 좋아짐.
