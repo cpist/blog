@@ -1,0 +1,169 @@
+---
+title: "MLIR Transform Tutorial Ch 3 에 대하여"
+date: "2025-11-29"
+summary: "Adding a Simple New Transformation Operation"
+tags: ["mlir", "transform"]
+draft: false
+---
+
+1) Transform의 재사용성에 포커싱을 맞춘다.
+
+매번 반복되는 패턴에 대해서는 TransformEachOpTraint을 쓰는것이 좋다.
+- Transform 연산을 만들때마다
+  - payload를 검증하고
+  - 여러 operation에 대해서 loop를 돌리고
+  - 결과를 모아서 반환하는 것이 너무 반복적이고 귀찮다.
+
+* 이를 해결하기 위한 방안이 언급한 TransformEachOpTrait
+
+이 Trait을 쓸 경우
+- apply() 전체를 직접 구현할 필요가 없고
+- 대신 applyToOne() 만 구현하면 된다.
+```
+applyToOne(rewriter, payloadOp, results, state)
+```
+
+- 각 payload operation 하나만 처리
+- 나머지 반복/검증/결과 병합은 trait이 자동 처리
+
+2) Handle 타입을 더 똑똑하게 제한하는 법 (Type Constraint)
+
+기존 handle 타입은 아래와 같이 아무 op나 다 들어올수가 있음.
+```
+!transform.any_op
+```
+
+해결책은 concrete Op 타입 을 쓰는 법
+```
+Transform_ConcreteOpType<"func.call">
+```
+func.call 만 받으라고 타입으로 강제 하는 것
+
+3) interface를 구현한 op만 허용하는 방법 - 직접 타입을 만든다면?
+- CallOpInterface 를 구현한 op만 받고 싶은데
+- Transform dialect 에 그런 타입이 없다면
+
+해결책은 Transform 용 커스텀 타입을 정의하는 것이다.
+```
+def CallOpInterfaceHandle : TypeDef<...> {
+  let mnemonic = "my.call_op_interface";
+}
+```
+
+그리고 C++ 에서
+```
+checkPayload(...) {
+  if (!isa<CallOpInterface>(op))
+    error!
+}
+```
+
+이것의 효과는
+- transform IR 단계에서 사전 검증
+- 런타임 전에 잘못된 사용을 차단함.
+
+4) 오히려 여러 타입을 허용하고 싶을 때는 AnyTypeOf
+```
+AnyTypeOf<[
+  Transform_ConcreteOpType<"func.call">,
+  CallOpInterfaceHandle
+]>
+```
+위의 의미는
+- func.call 도 좋고
+- CallOpInterface 구현 op도 좋다.
+
+5) Handle을 consume 하는 Transform 연산
+- 기존 op를 완전히 다른 op로 바꾸는 경우
+  - func.call `->` my.mm4
+- 기존 handle은 더 이상 의미가 없다.
+- 새로운 handle을 결과로 만들어야 한다.
+
+* 핵심 포인트
+- applyToOne() 에서
+  - 새 op 생성
+  - results.push_back(newOp)
+- Memory effect에
+  - consumesHandle
+  - producesHandle
+  - modifiesPayload
+중요한 제약 사항도 있는데
+- applyToOne() 은
+  - 결과가 항상 1개 이상일 때만 사용 가능함
+- 빈 Handle을 반환하려면
+  - apply() 를 직접 구현해야 함.
+
+6) MemoryEffects도 귀찮다면 Trait로 해결한다.
+두가지 패턴을 자주 쓰는데
+* FunctionalStyleTransformOpTrait
+- 입력 handle : 전부 소비
+- 결과 handle : 전부 생성
+- payload IR : 수정
+결과 적으로 완전 변환(transform)
+
+* NavigationTransformOpTrait
+- 입력 handle : 읽기만
+- 결과 handle : 생성
+- payload IR : 읽기만
+결과적으로 탐색 / 조회용 transform
+
+이 결과 getEffects() 직접 구현은 하지 않고, 선언 한 줄로 끝낸다.
+
+참고로 NavigationTransformOpTrait 에 대해서 handle이 늘어나는것은 메타데이터가 늘어나는 것이지, 실제 코드 증가는 아님.
+Transform dialect 에서 handle은 payload IR(실제 프로그램) 이 가리키는 참조 목록이다.
+즉 payload IR은 알다시피 실제 실행되는 코드이고, handle은 이 op들을 보라는 메타 정보임.
+
+```
+!transform.any_op
+```
+이런게 100개 생긴다고 해도 실제 IR은 1줄도 늘어나지 않는다는 것.
+
+물론 handle은 쌓일 수 있긴 한데
+(1) SSA 값이라는게 핵심
+```
+%h1 = transform.match ...
+%h2 = transform.filter %h1 ...
+%h3 = transform.get_users %h2 ...
+```
+Transform IR도 SSA 임.
+- %h1, %h2, %h3가 동시에 살아 있을 필요가 없고
+- 이후 안쓰이면 dead value가 된다. (즉 DCE 대상임.)
+
+(2) Transform IR도 최적화 되는게 핵심
+뭔말인고 하니 Transform IR은 
+- DCE (dead code elimination)
+- CSE
+- 상수 전파와 같은 최적화를 자기 자신에게도 적용받음
+
+즉, 아래와 같은건 자동으로 제거된다. 
+```
+%tmp = transform.filter %h ...
+// %tmp 안 씀
+```
+
+* consume을 하지 않는데 최적화가 되나?
+여기서 NavigationTransformOp 의 경우 정보를 얻고
+- 대상 IR은 그대로 하면서도
+- 다양한 관점으로 같은 IR을 여러번 바라볼 수 있게 한다.
+- 최적화 의사결정의 단계를 거침 (어떤 op들이 있는지, loop 안에 뭐가 있는지, call의 user는 누구인지)
+
+CT 여러번 찍는다고 몸이 바뀌는게 아닌것과 같음.
+
+consume을 안해서 최적화에 유리한 케이스가 있음
+- 같은 대상에 여러 분석을 적용 가능하다던지
+```
+%loops = transform.match ops{loop}
+%inner = transform.get_nested %loops
+%calls = transform.match %inner ops{call}
+```
+- transform script가 선언적으로 된다던지
+  - Navigation 과 Functional을 분리함으로서 이해, 디버깅, 재사용이 용이해 지게 함.
+
+=====================================================================
+
+요약해 보자면 Transform 연산을 더 안전하고, 재사용 가능하고, 덜 귀찮게 쓰는 방법들을 정리해 보았음.
+- 반복 로직은 TransformEachOpTrait
+- 사전 조건 검증은 커스텀 Transform 타입으로
+- 유연한 타입 허용은 AnyTypeOf로
+- op 교체는 handle 소비 / 생성으로
+- 메모리 효과는 Trait으로 자동화함.
