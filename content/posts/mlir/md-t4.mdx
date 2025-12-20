@@ -1,0 +1,177 @@
+---
+title: "MLIR Transform Tutorial Ch 4 에 대하여"
+date: "2025-11-30"
+summary: "Matching Payload with Transform Operations"
+tags: ["mlir", "transform"]
+draft: false
+---
+
+1) Transform Dialect 안에서 어디를 고칠지를 직접 찾는 과정
+- 매칭(match) 로 타깃 연산을 발견하고
+- 체인 매칭으로 관련된 연산을 묶고
+- 커스텀 매처로 똑똑하게 조건을 정의하고
+- 추론된 특성까지 판별함.
+
+2) 왜 Match가 필요할까? (문제 제기)
+- 이전까지는 matmul을 고쳐야 한다는 타깃을 외부(C++/옵션) 에서 지정했음
+- Transform dialect는 이미 주어진 핸들만 변형하는 것
+
+* 이것의 문제점은
+- 인터페이스가 2개 (C++ 그리고 transform)
+- 이렇게 되면 자동화 / 재사용도 어려워지고
+- Transform dialect가 주도한다라는 느낌이 약해진다.
+
+* 이를 위한 해결책이
+- Transform dialect 자체가 "이 연산이 내가 찾던 그 연산인지" 를 판단하게 하는 것이다.
+
+3) Match 연산의 기본 개념
+Match 연산의 특징은 다음과 같음
+- payload IR을 변경하지 않음
+- 조건이 안 맞으면 실패
+- 다른 match 들과 조합이 가능
+
+즉 조건 검사 전용 transform op라고 할 수 있음.
+```
+transform.match.operation_name %op ["linalg.matmul"]
+```
+즉, matmul이 아니면 실패라는 것이다.
+
+4) Simple Match : 이름으로 찾는 과정
+목표는 IR 전체에서
+- linalg.matmul
+- linalg.elementwise를 찾는 것이다
+
+방법은
+1. matcher named_sequence를 정의하거나
+2. transform.collect_matching 으로 전부 수집하는 것.
+```
+%matmul = transform.collect_matching @match_matmul in %root
+```
+
+이 결과
+- 외부 인자 없이 transform script 만으로 원하는 연산들을 자동 발견 할 수 있음.
+```
+-debug-only=transform-matcher
+```
+이렇게 하면 왜 매칭을 실패했는지 로그로 확인이 가능함.
+
+5) Chain Matching : 연관된 연산만 묶기
+
+일반적인 경우에서의 문제는
+- matmul이 여러개이고
+- elementwise도 여러개이고
+- 서로 관련 없는 연산까지 다 잡힌 다는 것
+
+```
+// 이런 패턴을 원하기에
+matmul → elementwise(add) → elementwise(max)
+```
+
+* 해결 전략은 아래와 같음
+- use-def 체인을 거꾸로 추적함
+- 마지막 연산 부터 시작을 함
+```
+%middle = transform.get_producer_of_operand %last[0]
+%matmul = transform.get_producer_of_operand %middle[0]
+```
+
+이 결과 
+- 진짜로 연결된 3개 연산만 묶어서 반환을 하고
+- 순서도 의미있게 보존을 함
+
+6) 어떤 operand도 괜찮다.
+기존에는 
+```
+get_producer_of_operand %op[0]
+```
+- 항상 0번 operand 라는 가정
+- 하지만 max(a, b) vs max(b, a) 는 같지 않겠는가
+
+이를 해결하기 위해 Custom Match Op를 만드는 것이다
+목표 지점은 operand 중 하나라도 조건을 만족하면 OK 라는 것이다.
+
+새 연산은
+```
+transform.match.my.has_operand_satisfying
+```
+
+이것이 동작하는 원리는
+- payload op의 모든 operand를 순회하면서
+- 각 operand에 대해 
+  - 내부 matcher 들을 실행하고
+  - 하나라도 성공하면 체크를
+- 성공 할 경우
+  - 어떤 operand 였는지 (position)
+  - 매칭된 연산 handle을 반환함.
+
+* 핵심 포인트는
+- MatchOpInterface를 구현하고
+- payload는 절대 수정하지 않는 다는 것
+- 실패는 silenceable failure로 처리함. 
+
+```
+max(add(matmul, bias), 0)
+max(0, add(matmul, bias))
+```
+이 덕분에 둘다 동일한 패턴으로 매칭이 가능하게 되는 것이다
+
+7) Parameter는 transform 중에도 변하지 않는 값임.
+- ` %pos: !transform.param<i32>`
+- operand 위치 같은 상수 정보
+- transform 전반에서 안전하게 사용이 가능함.
+즉, 핸들(handle) != 파라미터(parameter)
+
+8) foreach_match : 미니 패턴리라이터
+```
+transform.foreach_match
+  @matcher -> @rewriter
+```
+- payload IR 전체 순회
+- matcher가 성공 할 때 마다
+- rewriter를 실행함
+Transform dialect 만으로
+- "패턴 매칭 + 액션"
+- 간단한 패턴 리라이터 완성
+
+9) 진짜 강력한 매칭은 추론된 특성에 있음
+예를 들어서
+- matmul이 linalg.matmul 이 아니라
+- linalg.generic 로 표현된 경우라면
+
+이를 해결하기 위해서는 이게 의미적으로 matmul 인가를 판단해야 함.
+그렇다면 체크해야 하는 특성들을 아래와 같을 것이다.
+- iterator rank = 3
+- 입력 2개, 출력 1개
+- projected permutation access
+- body 가 mulf + addf
+- contraction dimension 분류 결과가 적절한지
+
+이건
+- 단순 attribute 비교는 X
+- 분석 + 추론이 필요함.
+
+10) Structured Matchers의 위력
+Transform dialect는 이미 제공하고 있음
+- match.structured.rank
+- match.structured.body
+- classify_contraction_dims
+- 등등..
+
+이 덕분에
+- 복잡한 수학적 의미라던지
+- C++ matcher로 캡슐화를 하고
+- Transform script는 선언적으로 유지함
+
+Flow 를 정리해 보자면
+1. Transform 안에서 타깃을 직접 찾고
+2. Match op = 조건 검사 전용 transform으로서
+3. collect_matching으로 자동 발견하고
+4. use-def 체인으로 연관된 연산을 묶고
+5. 커스텀 matcher로 유연성을 확보하고
+6. parameter로 불변 정보를 전달하고
+7. foreach_match로 패턴 리라이터를 구현하고
+8. 추론 기반 매칭으로 진짜 의미를 판별한다.
+
+=====================================================================
+
+요약해 보자면 Transform dialect를 연산을 단순히 고치는 도구에서 패턴을 이해하고 판단하는 역할까지 진화시키는 과정을 학습하였다.
