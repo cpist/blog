@@ -1,0 +1,119 @@
+---
+title: "MLIR Tutorial Creating a dialect 에 대하여"
+date: "2025-12-06"
+summary: "Creating a dialect"
+tags: ["mlir", "dialect"]
+draft: false
+---
+
+1) Dialect 디렉토리 구조 (표준)
+- 공개(public) dialect는 보통 다음과 같이 구성되어 있음.
+```
+mlir/include/mlir/Dialect/Foo        // public 헤더
+mlir/lib/Dialect/Foo                // 구현 소스
+mlir/lib/Dialect/Foo/IR             // ODS로 생성되지 않는 IR 구현
+mlir/lib/Dialect/Foo/Transforms     // rewrite / transform
+mlir/test/Dialect/Foo               // 테스트
+```
+- include/ : ODS(TableGen) 기반의 FooOps.td 포함
+- IR/ : FooDialect.cpp 등 수동 구현 코드
+- Transforms/ : DRR(TableGen) 기반 rewrite 규칙 
+  - Dialect 이름에는 일반적으로 Ops 접미사를 붙이지 않음 (파일명 FooOps.cpp 정도는 예외)
+
+2) TableGen (ODS / DRR) 사용 방식
+* Dialect Operations (ODS)
+- 핵심 파일 : FooOps.td
+- add_mlir_dialect() 사용
+
+```
+add_mlir_dialect(FooOps foo)
+add_mlir_doc(FooOps FooDialect Dialects/ -gen-dialect-doc)
+```
+- 생성물:
+  - FooOps.h.inc / .cpp.inc
+  - FooOpsInterfaces.h.inc / .cpp.inc
+- 자동으로 MLIRFooOpsIncGen 타겟 생성
+
+* Transform / Rewrite (DRR)
+  - 파일: FooTransforms.td
+  - 직접 TableGen을 설정함.
+```
+set(LLVM_TARGET_DEFINITIONS FooTransforms.td)
+mlir_tablegen(FooTransforms.h.inc -gen-rewriters)
+add_public_tablegen_target(MLIRFooTransformIncGen)
+```
+
+3) Dialect Library 작성 규칙
+- add_mlir_dialect_library() 사용
+- TableGen 결과물은 DEPENDS 로 연결
+- 다른 dialect 의존성은 target_link_libraries(PUBLIC ...)
+
+```
+add_mlir_dialect_library(MLIRFoo
+  DEPENDS
+    MLIRFooOpsIncGen
+    MLIRFooTransformsIncGen
+
+  LINK_COMPONENTS
+    Core   # LLVM 컴포넌트
+
+  LINK_LIBS PUBLIC
+    MLIRBar
+)
+```
+
+중요한 원칙은
+- add_dependencies() 를 직접 사용하지 않는것
+- PUBLIC 링크 만으로 IncGen 의존성은 충분
+- LLVM IR ㅏㅅ용 시 intrinsics_gen 의존 필요할 수 있음.
+
+4) Dialect Library 관리
+- 모든 dialect 라이브러리는 자동으로 수집된다.
+- mlir-opt, libMLIR.so 링크 시 사용된다.
+```
+get_property(dialect_libs GLOBAL PROPERTY MLIR_DIALECT_LIBS)
+```
+
+5) Dialet Conversion 구조
+Directory 규칙
+```
+mlir/include/mlir/Conversion/XToY
+mlir/lib/Conversion/XToY
+mlir/test/Conversion/XToY
+```
+설명해 보자면
+- 파일명에 Convert는 생략, 즉 VectorToLLVM.cpp
+- Pass 정의는 conversion 구현과 분리 
+  - ex: VectorToLLVMPass.h
+- 공통 코드는
+  - mlir/lib/Conversion/XCommon
+
+6) Conversion Library 작성
+- add_mlir_conversion_library() 사용
+- Source / Target dialect 를 PUBLIC 으로 링크
+```
+add_mlir_conversion_library(MLIRBarToFoo
+  BarToFoo.cpp
+
+  ADDITIONAL_HEADER_DIRS
+    ${MLIR_MAIN_INCLUDE_DIR}/mlir/Conversion/BarToFoo
+
+  LINK_LIBS PUBLIC
+    MLIRBar
+    MLIRFoo
+)
+```
+- IncGen 타겟을 직접 DEPENDS 할 필요 없음
+- LLVM IR 헤더 직접 사용 시 intrinsics_gen 필요 가능
+
+* Conversion 라이브러리 목록
+```
+get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
+```
+
+=====================================================================
+
+요약해 보자면
+- Dialect 는 ODS 중심이고 IR / Transforms 분리 구조라는 점
+- CMake 에서는 PUBLIC 링크로 의존성을 관리 한다는 점
+- Conversion은 XToY 단위 라이브러리로 분리하여 Pass 는 별도 정의한다는 점 이다.
