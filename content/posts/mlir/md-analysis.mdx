@@ -1,0 +1,112 @@
+---
+title: "MLIR Tutorial DataFlow Analysis 에 대하여"
+date: "2025-12-13"
+summary: "Writing DataFlow Analyses in MLIR"
+tags: ["mlir", "DataFlow Analysis"]
+draft: false
+---
+
+1) Dataflow analysis 란?
+- Dataflow analysis는 IR(중간 표현) 전반에 걸쳐 정보를 전달하는 분석 기법
+- MLIR에는 다양한 제어 흐름 구조 (Block, Region, CallGraph 등)가 있어 직접 구현하면 복잡해 질 수 있음.
+- 이를 단순화 하기 위해 MLIR은 ForwardDataFlowAnalysis 와 Lattice 유틸리티를 제공함.
+
+프레임워크 (라이브러리 코드) 가 구현되어 있고, 이걸 상속해서 쓰는 구조임.
+C++ 라이브러리 코드라는거
+
+2) Forward Dataflow Analysis
+- Forward 분석은 정의 -> 사용 방향으로 정보를 전파함.
+- 예제에서는 각 값에 붙은 metadata 라는 DictionaryAttr을 수집하고 전파하는 분석을 구현함.
+
+3) Lattice (격자)
+데이터플로우 분석의 핵심 추상화
+
+1. Lattice의 역할은
+- 분석 결과가 가질 수 있는 모든 가능한 상태를 표현
+- 각 IR 값(Value)에 대해 하나의 LatticeElement 가 존재함.
+- 분석 중 전파되는 정보의 컨테이너 역할.
+
+2. 특수 상태
+- 모든 lattice는 다음 두 상태를 반드시 가짐
+하나는 uninitialized
+  - 아직 분석 정보가 없음
+  - join 시 "다른 값 그대로 사용"
+다른 하나는 top / overdefined / unknown
+  - 가능한 모든 값 포함 (아무 가정도 할 수 없는 상태)
+  - join 시 결과는 항상 top
+
+```
+// Lattice 값 정의
+struct MyLatticeValue {
+  static MyLatticeValue getPessimisticValueState(...);
+  static MyLatticeValue join(const MyLatticeValue &, const MyLatticeValue &);
+};
+
+// transfer function 정의
+class MyAnalysis
+  : public ForwardDataFlowAnalysis<MyLatticeValue> {
+  ChangeResult visitOperation(
+    Operation *op,
+    ArrayRef<LatticeElement<MyLatticeValue> *> operands) override {
+    ...
+  }
+};
+
+```
+
+4) MetadataLatticeValue
+- lattice element가 실제로 담는 값 타입
+- 예제에서는 DictionaryAttr의 내용을 DenseMap으로 보관함.
+
+핵심 Method
+- getPessimisticValueState
+  - IR 정보가 없을 때의 보수적인 초기 상태 (top)
+- join(lhs, rhs)
+  - 두 lattice 값을 병합
+  - 단조성(monotonicity) 보장 필수
+  - 예제 정책 : 양쪽에 공통으로 존재하고 값이 같은 metadata만 유지
+- operator==
+  - lattice 값 비교
+
+5) LatticeElement
+- 특정 IR Value 에 대한 lattice 상태를 관리하는 Wrapper
+- uninitalized 상태를 내부적으로 처리함.
+
+주요 API
+- getValue() : 초기화된 값 접근
+- join(LatticeElement / ValueT) : 정보 병합, 변경 여부 반환
+- markPessimisticFixPoint() : 더 이상 정밀한 분석이 불가능하다고 표시
+
+6) ForwardDataFlowAnalysis Driver
+분석 전체를 실행 관리하는 드라이버 클래스
+
+핵심 기능
+- run(Operation *topLevelOp)
+  - top-level op 아래에서 분석 실행
+- getLatticeElement(Value)
+  - lattice가 없으면 새로 생성(uninitialized)
+- lookupLatticeElement(Value)
+  - 존재할 때만 반환 (분석 결과 조회 시 사용)
+
+7) visitOperation (Transfer Function)
+- 분석의 핵심 로직
+- 각 operation 에 대해
+  - operand lattice 정보를 기반으로 result / block argument의 lattice를 갱신
+
+예제 로직을 정리해 보자면
+1. op에 metadata가 없으면 결과 값들을 pessimistic fixpoint(top) 으로 설정함
+2. metatdata가 있으면 이를 lattice 값으로 만들어 결과 값들의 lattice에 join 함
+
+8) 분석 결과 사용 시 주의점
+- 결과 조회 시에는 lookupLatticeElement 를 사용함
+  - getLatticeElement는 새 element를 만들어 버릴 수 있음
+- lattice가 없다면
+  - 해당 value는 분석 중 방문되지 않았음
+  - ex) unreachable block
+  - 이런건 반드시 보수적으로 처리해야 한다는거
+
+=====================================================================
+
+요약해 보자면
+MLIR의 Forward Dataflow Analysis는 Lattice + ForwardDataFlowAnalysis + visitOperation(transfer function) 구조로 이루어지며, 
+단조적인 join 규칙과 pessimistic(top) 상태를 통해 안전하고 확장 가능한 분석을 가능하게 한다는 것이다.  
