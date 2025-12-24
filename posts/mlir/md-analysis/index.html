@@ -1,0 +1,160 @@
+<!DOCTYPE html><!--rgkoFkL_SxE7swusMMKT_--><html lang="ko"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="/blog/_next/static/chunks/d335db6b3f1a2619.css" data-precedence="next"/><link rel="preload" as="script" fetchPriority="low" href="/blog/_next/static/chunks/cbd55ab9639e1e66.js"/><script src="/blog/_next/static/chunks/8c4bb65ca9f95eb5.js" async=""></script><script src="/blog/_next/static/chunks/0ff423a9fcc0186e.js" async=""></script><script src="/blog/_next/static/chunks/88a8688d62cd2814.js" async=""></script><script src="/blog/_next/static/chunks/turbopack-8ff2f6efb1e78309.js" async=""></script><script src="/blog/_next/static/chunks/796e69ae18b2784c.js" async=""></script><script src="/blog/_next/static/chunks/ff1a16fafef87110.js" async=""></script><script src="/blog/_next/static/chunks/247eb132b7f7b574.js" async=""></script><title>MLIR Tutorial DataFlow Analysis 에 대하여 - CPIST&#x27;s blog</title><meta name="description" content="Writing DataFlow Analyses in MLIR"/><link rel="icon" href="/blog/favicon.ico?favicon.0b3bf435.ico" sizes="256x256" type="image/x-icon"/><script src="/blog/_next/static/chunks/a6dad97d9634a72d.js" noModule=""></script></head><body><div hidden=""><!--$--><!--/$--></div><main><header style="display:flex;justify-content:space-between;align-items:baseline;gap:12px"><h1 style="margin:8px 0"><a style="text-decoration:none" href="/blog/">CPIST&#x27;s blog</a></h1><nav style="display:flex;gap:12px"><a href="/blog/posts/">Posts</a></nav></header><hr style="border:0;border-top:1px solid #eee;margin:12px 0 24px"/><article><div style="color:#666;margin-bottom:6px"><a href="/mlir" style="text-decoration:none">/<!-- -->mlir</a></div><h2 style="margin-top:0">MLIR Tutorial DataFlow Analysis 에 대하여</h2><div style="color:#666;margin-bottom:18px">2025-12-13</div><p style="color:#333">Writing DataFlow Analyses in MLIR</p><hr style="border:0;border-top:1px solid #eee;margin:18px 0"/><div class="prose"><ol>
+<li>Dataflow analysis 란?</li>
+</ol>
+<ul>
+<li>Dataflow analysis는 IR(중간 표현) 전반에 걸쳐 정보를 전달하는 분석 기법</li>
+<li>MLIR에는 다양한 제어 흐름 구조 (Block, Region, CallGraph 등)가 있어 직접 구현하면 복잡해 질 수 있음.</li>
+<li>이를 단순화 하기 위해 MLIR은 ForwardDataFlowAnalysis 와 Lattice 유틸리티를 제공함.</li>
+</ul>
+<p>프레임워크 (라이브러리 코드) 가 구현되어 있고, 이걸 상속해서 쓰는 구조임.
+C++ 라이브러리 코드라는거</p>
+<ol start="2">
+<li>Forward Dataflow Analysis</li>
+</ol>
+<ul>
+<li>Forward 분석은 정의 -&gt; 사용 방향으로 정보를 전파함.</li>
+<li>예제에서는 각 값에 붙은 metadata 라는 DictionaryAttr을 수집하고 전파하는 분석을 구현함.</li>
+</ul>
+<ol start="3">
+<li>Lattice (격자)
+데이터플로우 분석의 핵심 추상화</li>
+</ol>
+<ol>
+<li>Lattice의 역할은</li>
+</ol>
+<ul>
+<li>분석 결과가 가질 수 있는 모든 가능한 상태를 표현</li>
+<li>각 IR 값(Value)에 대해 하나의 LatticeElement 가 존재함.</li>
+<li>분석 중 전파되는 정보의 컨테이너 역할.</li>
+</ul>
+<ol start="2">
+<li>특수 상태</li>
+</ol>
+<ul>
+<li>모든 lattice는 다음 두 상태를 반드시 가짐
+하나는 uninitialized<!-- -->
+<ul>
+<li>아직 분석 정보가 없음</li>
+<li>join 시 &quot;다른 값 그대로 사용&quot;
+다른 하나는 top / overdefined / unknown</li>
+<li>가능한 모든 값 포함 (아무 가정도 할 수 없는 상태)</li>
+<li>join 시 결과는 항상 top</li>
+</ul>
+</li>
+</ul>
+<pre><code>// Lattice 값 정의
+struct MyLatticeValue {
+  static MyLatticeValue getPessimisticValueState(...);
+  static MyLatticeValue join(const MyLatticeValue &amp;, const MyLatticeValue &amp;);
+};
+
+// transfer function 정의
+class MyAnalysis
+  : public ForwardDataFlowAnalysis&lt;MyLatticeValue&gt; {
+  ChangeResult visitOperation(
+    Operation *op,
+    ArrayRef&lt;LatticeElement&lt;MyLatticeValue&gt; *&gt; operands) override {
+    ...
+  }
+};
+
+</code></pre>
+<ol start="4">
+<li>MetadataLatticeValue</li>
+</ol>
+<ul>
+<li>lattice element가 실제로 담는 값 타입</li>
+<li>예제에서는 DictionaryAttr의 내용을 DenseMap으로 보관함.</li>
+</ul>
+<p>핵심 Method</p>
+<ul>
+<li>getPessimisticValueState<!-- -->
+<ul>
+<li>IR 정보가 없을 때의 보수적인 초기 상태 (top)</li>
+</ul>
+</li>
+<li>join(lhs, rhs)<!-- -->
+<ul>
+<li>두 lattice 값을 병합</li>
+<li>단조성(monotonicity) 보장 필수</li>
+<li>예제 정책 : 양쪽에 공통으로 존재하고 값이 같은 metadata만 유지</li>
+</ul>
+</li>
+<li>operator==<!-- -->
+<ul>
+<li>lattice 값 비교</li>
+</ul>
+</li>
+</ul>
+<ol start="5">
+<li>LatticeElement</li>
+</ol>
+<ul>
+<li>특정 IR Value 에 대한 lattice 상태를 관리하는 Wrapper</li>
+<li>uninitalized 상태를 내부적으로 처리함.</li>
+</ul>
+<p>주요 API</p>
+<ul>
+<li>getValue() : 초기화된 값 접근</li>
+<li>join(LatticeElement / ValueT) : 정보 병합, 변경 여부 반환</li>
+<li>markPessimisticFixPoint() : 더 이상 정밀한 분석이 불가능하다고 표시</li>
+</ul>
+<ol start="6">
+<li>ForwardDataFlowAnalysis Driver
+분석 전체를 실행 관리하는 드라이버 클래스</li>
+</ol>
+<p>핵심 기능</p>
+<ul>
+<li>run(Operation *topLevelOp)<!-- -->
+<ul>
+<li>top-level op 아래에서 분석 실행</li>
+</ul>
+</li>
+<li>getLatticeElement(Value)<!-- -->
+<ul>
+<li>lattice가 없으면 새로 생성(uninitialized)</li>
+</ul>
+</li>
+<li>lookupLatticeElement(Value)<!-- -->
+<ul>
+<li>존재할 때만 반환 (분석 결과 조회 시 사용)</li>
+</ul>
+</li>
+</ul>
+<ol start="7">
+<li>visitOperation (Transfer Function)</li>
+</ol>
+<ul>
+<li>분석의 핵심 로직</li>
+<li>각 operation 에 대해<!-- -->
+<ul>
+<li>operand lattice 정보를 기반으로 result / block argument의 lattice를 갱신</li>
+</ul>
+</li>
+</ul>
+<p>예제 로직을 정리해 보자면</p>
+<ol>
+<li>op에 metadata가 없으면 결과 값들을 pessimistic fixpoint(top) 으로 설정함</li>
+<li>metatdata가 있으면 이를 lattice 값으로 만들어 결과 값들의 lattice에 join 함</li>
+</ol>
+<ol start="8">
+<li>분석 결과 사용 시 주의점</li>
+</ol>
+<ul>
+<li>결과 조회 시에는 lookupLatticeElement 를 사용함<!-- -->
+<ul>
+<li>getLatticeElement는 새 element를 만들어 버릴 수 있음</li>
+</ul>
+</li>
+<li>lattice가 없다면<!-- -->
+<ul>
+<li>해당 value는 분석 중 방문되지 않았음</li>
+<li>ex) unreachable block</li>
+<li>이런건 반드시 보수적으로 처리해야 한다는거</li>
+</ul>
+</li>
+</ul>
+<p>=====================================================================</p>
+<p>요약해 보자면
+MLIR의 Forward Dataflow Analysis는 Lattice + ForwardDataFlowAnalysis + visitOperation(transfer function) 구조로 이루어지며,
+단조적인 join 규칙과 pessimistic(top) 상태를 통해 안전하고 확장 가능한 분석을 가능하게 한다는 것이다.</p></div></article><!--$--><!--/$--><footer style="margin-top:48px;padding-top:16px;border-top:1px solid #eee;color:#666">© <!-- -->2025<!-- --> CPIST&#x27;s blog</footer></main><script src="/blog/_next/static/chunks/cbd55ab9639e1e66.js" id="_R_" async=""></script><script>(self.__next_f=self.__next_f||[]).push([0])</script><script>self.__next_f.push([1,"1:\"$Sreact.fragment\"\n2:I[22016,[\"/blog/_next/static/chunks/796e69ae18b2784c.js\"],\"\"]\n3:I[39756,[\"/blog/_next/static/chunks/ff1a16fafef87110.js\",\"/blog/_next/static/chunks/247eb132b7f7b574.js\"],\"default\"]\n4:I[37457,[\"/blog/_next/static/chunks/ff1a16fafef87110.js\",\"/blog/_next/static/chunks/247eb132b7f7b574.js\"],\"default\"]\n6:I[97367,[\"/blog/_next/static/chunks/ff1a16fafef87110.js\",\"/blog/_next/static/chunks/247eb132b7f7b574.js\"],\"OutletBoundary\"]\n7:\"$Sreact.suspense\"\n9:I[97367,[\"/blog/_next/static/chunks/ff1a16fafef87110.js\",\"/blog/_next/static/chunks/247eb132b7f7b574.js\"],\"ViewportBoundary\"]\nb:I[97367,[\"/blog/_next/static/chunks/ff1a16fafef87110.js\",\"/blog/_next/static/chunks/247eb132b7f7b574.js\"],\"MetadataBoundary\"]\nd:I[68027,[],\"default\"]\n:HL[\"/blog/_next/static/chunks/d335db6b3f1a2619.css\",\"style\"]\n"])</script><script>self.__next_f.push([1,"0:{\"P\":null,\"b\":\"rgkoFkL_SxE7swusMMKT_\",\"c\":[\"\",\"posts\",\"mlir\",\"md-analysis\",\"\"],\"q\":\"\",\"i\":false,\"f\":[[[\"\",{\"children\":[\"posts\",{\"children\":[[\"slug\",\"mlir/md-analysis\",\"c\"],{\"children\":[\"__PAGE__\",{}]}]}]},\"$undefined\",\"$undefined\",true],[[\"$\",\"$1\",\"c\",{\"children\":[[[\"$\",\"link\",\"0\",{\"rel\":\"stylesheet\",\"href\":\"/blog/_next/static/chunks/d335db6b3f1a2619.css\",\"precedence\":\"next\",\"crossOrigin\":\"$undefined\",\"nonce\":\"$undefined\"}],[\"$\",\"script\",\"script-0\",{\"src\":\"/blog/_next/static/chunks/796e69ae18b2784c.js\",\"async\":true,\"nonce\":\"$undefined\"}]],[\"$\",\"html\",null,{\"lang\":\"ko\",\"children\":[\"$\",\"body\",null,{\"children\":[\"$\",\"main\",null,{\"children\":[[\"$\",\"header\",null,{\"style\":{\"display\":\"flex\",\"justifyContent\":\"space-between\",\"alignItems\":\"baseline\",\"gap\":12},\"children\":[[\"$\",\"h1\",null,{\"style\":{\"margin\":\"8px 0\"},\"children\":[\"$\",\"$L2\",null,{\"href\":\"/\",\"style\":{\"textDecoration\":\"none\"},\"children\":\"CPIST's blog\"}]}],[\"$\",\"nav\",null,{\"style\":{\"display\":\"flex\",\"gap\":12},\"children\":[\"$\",\"$L2\",null,{\"href\":\"/posts\",\"children\":\"Posts\"}]}]]}],[\"$\",\"hr\",null,{\"style\":{\"border\":0,\"borderTop\":\"1px solid #eee\",\"margin\":\"12px 0 24px\"}}],[\"$\",\"$L3\",null,{\"parallelRouterKey\":\"children\",\"error\":\"$undefined\",\"errorStyles\":\"$undefined\",\"errorScripts\":\"$undefined\",\"template\":[\"$\",\"$L4\",null,{}],\"templateStyles\":\"$undefined\",\"templateScripts\":\"$undefined\",\"notFound\":[[[\"$\",\"title\",null,{\"children\":\"404: This page could not be found.\"}],[\"$\",\"div\",null,{\"style\":{\"fontFamily\":\"system-ui,\\\"Segoe UI\\\",Roboto,Helvetica,Arial,sans-serif,\\\"Apple Color Emoji\\\",\\\"Segoe UI Emoji\\\"\",\"height\":\"100vh\",\"textAlign\":\"center\",\"display\":\"flex\",\"flexDirection\":\"column\",\"alignItems\":\"center\",\"justifyContent\":\"center\"},\"children\":[\"$\",\"div\",null,{\"children\":[[\"$\",\"style\",null,{\"dangerouslySetInnerHTML\":{\"__html\":\"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}\"}}],[\"$\",\"h1\",null,{\"className\":\"next-error-h1\",\"style\":{\"display\":\"inline-block\",\"margin\":\"0 20px 0 0\",\"padding\":\"0 23px 0 0\",\"fontSize\":24,\"fontWeight\":500,\"verticalAlign\":\"top\",\"lineHeight\":\"49px\"},\"children\":404}],[\"$\",\"div\",null,{\"style\":{\"display\":\"inline-block\"},\"children\":[\"$\",\"h2\",null,{\"style\":{\"fontSize\":14,\"fontWeight\":400,\"lineHeight\":\"49px\",\"margin\":0},\"children\":\"This page could not be found.\"}]}]]}]}]],[]],\"forbidden\":\"$undefined\",\"unauthorized\":\"$undefined\"}],[\"$\",\"footer\",null,{\"style\":{\"marginTop\":48,\"paddingTop\":16,\"borderTop\":\"1px solid #eee\",\"color\":\"#666\"},\"children\":[\"© \",2025,\" CPIST's blog\"]}]]}]}]}]]}],{\"children\":[[\"$\",\"$1\",\"c\",{\"children\":[null,[\"$\",\"$L3\",null,{\"parallelRouterKey\":\"children\",\"error\":\"$undefined\",\"errorStyles\":\"$undefined\",\"errorScripts\":\"$undefined\",\"template\":[\"$\",\"$L4\",null,{}],\"templateStyles\":\"$undefined\",\"templateScripts\":\"$undefined\",\"notFound\":\"$undefined\",\"forbidden\":\"$undefined\",\"unauthorized\":\"$undefined\"}]]}],{\"children\":[[\"$\",\"$1\",\"c\",{\"children\":[null,[\"$\",\"$L3\",null,{\"parallelRouterKey\":\"children\",\"error\":\"$undefined\",\"errorStyles\":\"$undefined\",\"errorScripts\":\"$undefined\",\"template\":[\"$\",\"$L4\",null,{}],\"templateStyles\":\"$undefined\",\"templateScripts\":\"$undefined\",\"notFound\":\"$undefined\",\"forbidden\":\"$undefined\",\"unauthorized\":\"$undefined\"}]]}],{\"children\":[[\"$\",\"$1\",\"c\",{\"children\":[\"$L5\",null,[\"$\",\"$L6\",null,{\"children\":[\"$\",\"$7\",null,{\"name\":\"Next.MetadataOutlet\",\"children\":\"$@8\"}]}]]}],{},null,false,false]},null,false,false]},null,false,false]},null,false,false],[\"$\",\"$1\",\"h\",{\"children\":[null,[\"$\",\"$L9\",null,{\"children\":\"$@a\"}],[\"$\",\"div\",null,{\"hidden\":true,\"children\":[\"$\",\"$Lb\",null,{\"children\":[\"$\",\"$7\",null,{\"name\":\"Next.Metadata\",\"children\":\"$@c\"}]}]}],null]}],false]],\"m\":\"$undefined\",\"G\":[\"$d\",[]],\"S\":true}\n"])</script><script>self.__next_f.push([1,"5:[\"$\",\"article\",null,{\"children\":[[\"$\",\"div\",null,{\"style\":{\"color\":\"#666\",\"marginBottom\":6},\"children\":[\"$\",\"a\",null,{\"href\":\"/mlir\",\"style\":{\"textDecoration\":\"none\"},\"children\":[\"/\",\"mlir\"]}]}],[\"$\",\"h2\",null,{\"style\":{\"marginTop\":0},\"children\":\"MLIR Tutorial DataFlow Analysis 에 대하여\"}],[\"$\",\"div\",null,{\"style\":{\"color\":\"#666\",\"marginBottom\":18},\"children\":\"2025-12-13\"}],[\"$\",\"p\",null,{\"style\":{\"color\":\"#333\"},\"children\":\"Writing DataFlow Analyses in MLIR\"}],[\"$\",\"hr\",null,{\"style\":{\"border\":0,\"borderTop\":\"1px solid #eee\",\"margin\":\"18px 0\"}}],[\"$\",\"div\",null,{\"className\":\"prose\",\"children\":[[\"$\",\"ol\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"Dataflow analysis 란?\"}],\"\\n\"]}],\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"Dataflow analysis는 IR(중간 표현) 전반에 걸쳐 정보를 전달하는 분석 기법\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"MLIR에는 다양한 제어 흐름 구조 (Block, Region, CallGraph 등)가 있어 직접 구현하면 복잡해 질 수 있음.\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"이를 단순화 하기 위해 MLIR은 ForwardDataFlowAnalysis 와 Lattice 유틸리티를 제공함.\"}],\"\\n\"]}],\"\\n\",[\"$\",\"p\",null,{\"children\":\"프레임워크 (라이브러리 코드) 가 구현되어 있고, 이걸 상속해서 쓰는 구조임.\\nC++ 라이브러리 코드라는거\"}],\"\\n\",[\"$\",\"ol\",null,{\"start\":\"2\",\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"Forward Dataflow Analysis\"}],\"\\n\"]}],\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"Forward 분석은 정의 -\u003e 사용 방향으로 정보를 전파함.\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"예제에서는 각 값에 붙은 metadata 라는 DictionaryAttr을 수집하고 전파하는 분석을 구현함.\"}],\"\\n\"]}],\"\\n\",[\"$\",\"ol\",null,{\"start\":\"3\",\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"Lattice (격자)\\n데이터플로우 분석의 핵심 추상화\"}],\"\\n\"]}],\"\\n\",[\"$\",\"ol\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"Lattice의 역할은\"}],\"\\n\"]}],\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"분석 결과가 가질 수 있는 모든 가능한 상태를 표현\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"각 IR 값(Value)에 대해 하나의 LatticeElement 가 존재함.\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"분석 중 전파되는 정보의 컨테이너 역할.\"}],\"\\n\"]}],\"\\n\",[\"$\",\"ol\",null,{\"start\":\"2\",\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"특수 상태\"}],\"\\n\"]}],\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":[\"모든 lattice는 다음 두 상태를 반드시 가짐\\n하나는 uninitialized\",\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"아직 분석 정보가 없음\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"join 시 \\\"다른 값 그대로 사용\\\"\\n다른 하나는 top / overdefined / unknown\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"가능한 모든 값 포함 (아무 가정도 할 수 없는 상태)\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"join 시 결과는 항상 top\"}],\"\\n\"]}],\"\\n\"]}],\"\\n\"]}],\"\\n\",[\"$\",\"pre\",null,{\"children\":[\"$\",\"code\",null,{\"children\":\"// Lattice 값 정의\\nstruct MyLatticeValue {\\n  static MyLatticeValue getPessimisticValueState(...);\\n  static MyLatticeValue join(const MyLatticeValue \u0026, const MyLatticeValue \u0026);\\n};\\n\\n// transfer function 정의\\nclass MyAnalysis\\n  : public ForwardDataFlowAnalysis\u003cMyLatticeValue\u003e {\\n  ChangeResult visitOperation(\\n    Operation *op,\\n    ArrayRef\u003cLatticeElement\u003cMyLatticeValue\u003e *\u003e operands) override {\\n    ...\\n  }\\n};\\n\\n\"}]}],\"\\n\",[\"$\",\"ol\",null,{\"start\":\"4\",\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"MetadataLatticeValue\"}],\"\\n\"]}],\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"lattice element가 실제로 담는 값 타입\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"예제에서는 DictionaryAttr의 내용을 DenseMap으로 보관함.\"}],\"\\n\"]}],\"\\n\",[\"$\",\"p\",null,{\"children\":\"핵심 Method\"}],\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":[\"getPessimisticValueState\",\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"IR 정보가 없을 때의 보수적인 초기 상태 (top)\"}],\"\\n\"]}],\"\\n\"]}],\"\\n\",[\"$\",\"li\",null,{\"children\":[\"join(lhs, rhs)\",\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"두 lattice 값을 병합\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"단조성(monotonicity) 보장 필수\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"예제 정책 : 양쪽에 공통으로 존재하고 값이 같은 metadata만 유지\"}],\"\\n\"]}],\"\\n\"]}],\"\\n\",[\"$\",\"li\",null,{\"children\":[\"operator==\",\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"lattice 값 비교\"}],\"\\n\"]}],\"\\n\"]}],\"\\n\"]}],\"\\n\",[\"$\",\"ol\",null,{\"start\":\"5\",\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"LatticeElement\"}],\"\\n\"]}],\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"특정 IR Value 에 대한 lattice 상태를 관리하는 Wrapper\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"uninitalized 상태를 내부적으로 처리함.\"}],\"\\n\"]}],\"\\n\",[\"$\",\"p\",null,{\"children\":\"주요 API\"}],\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"getValue() : 초기화된 값 접근\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"join(LatticeElement / ValueT) : 정보 병합, 변경 여부 반환\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"markPessimisticFixPoint() : 더 이상 정밀한 분석이 불가능하다고 표시\"}],\"\\n\"]}],\"\\n\",[\"$\",\"ol\",null,{\"start\":\"6\",\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"ForwardDataFlowAnalysis Driver\\n분석 전체를 실행 관리하는 드라이버 클래스\"}],\"\\n\"]}],\"\\n\",[\"$\",\"p\",null,{\"children\":\"핵심 기능\"}],\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":[\"run(Operation *topLevelOp)\",\"\\n\",\"$Le\",\"\\n\"]}],\"\\n\",\"$Lf\",\"\\n\",\"$L10\",\"\\n\"]}],\"\\n\",\"$L11\",\"\\n\",\"$L12\",\"\\n\",\"$L13\",\"\\n\",\"$L14\",\"\\n\",\"$L15\",\"\\n\",\"$L16\",\"\\n\",\"$L17\",\"\\n\",\"$L18\"]}]]}]\n"])</script><script>self.__next_f.push([1,"e:[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"top-level op 아래에서 분석 실행\"}],\"\\n\"]}]\nf:[\"$\",\"li\",null,{\"children\":[\"getLatticeElement(Value)\",\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"lattice가 없으면 새로 생성(uninitialized)\"}],\"\\n\"]}],\"\\n\"]}]\n10:[\"$\",\"li\",null,{\"children\":[\"lookupLatticeElement(Value)\",\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"존재할 때만 반환 (분석 결과 조회 시 사용)\"}],\"\\n\"]}],\"\\n\"]}]\n11:[\"$\",\"ol\",null,{\"start\":\"7\",\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"visitOperation (Transfer Function)\"}],\"\\n\"]}]\n12:[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"분석의 핵심 로직\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":[\"각 operation 에 대해\",\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"operand lattice 정보를 기반으로 result / block argument의 lattice를 갱신\"}],\"\\n\"]}],\"\\n\"]}],\"\\n\"]}]\n13:[\"$\",\"p\",null,{\"children\":\"예제 로직을 정리해 보자면\"}]\n14:[\"$\",\"ol\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"op에 metadata가 없으면 결과 값들을 pessimistic fixpoint(top) 으로 설정함\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"metatdata가 있으면 이를 lattice 값으로 만들어 결과 값들의 lattice에 join 함\"}],\"\\n\"]}]\n15:[\"$\",\"ol\",null,{\"start\":\"8\",\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"분석 결과 사용 시 주의점\"}],\"\\n\"]}]\n16:[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":[\"결과 조회 시에는 lookupLatticeElement 를 사용함\",\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"getLatticeElement는 새 element를 만들어 버릴 수 있음\"}],\"\\n\"]}],\"\\n\"]}],\"\\n\",[\"$\",\"li\",null,{\"children\":[\"lattice가 없다면\",\"\\n\",[\"$\",\"ul\",null,{\"children\":[\"\\n\",[\"$\",\"li\",null,{\"children\":\"해당 value는 분석 중 방문되지 않았음\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"ex) unreachable block\"}],\"\\n\",[\"$\",\"li\",null,{\"children\":\"이런건 반드시 보수적으로 처리해야 한다는거\"}],\"\\n\"]}],\"\\n\"]}],\"\\n\"]}]\n17:[\"$\",\"p\",null,{\"children\":\"=====================================================================\"}]\n18:[\"$\",\"p\",null,{\"children\":\"요약해 보자면\\nMLIR의 Forward Dataflow Analysis는 Lattice + ForwardDataFlowAnalysis + visitOperation(transfer function) 구조로 이루어지며,\\n단조적인 join 규칙과 pessimistic(top) 상태를 통해 안전하고 확장 가능한 분석을 가능하게 한다는 것이다.\"}]\n"])</script><script>self.__next_f.push([1,"a:[[\"$\",\"meta\",\"0\",{\"charSet\":\"utf-8\"}],[\"$\",\"meta\",\"1\",{\"name\":\"viewport\",\"content\":\"width=device-width, initial-scale=1\"}]]\n"])</script><script>self.__next_f.push([1,"19:I[27201,[\"/blog/_next/static/chunks/ff1a16fafef87110.js\",\"/blog/_next/static/chunks/247eb132b7f7b574.js\"],\"IconMark\"]\nc:[[\"$\",\"title\",\"0\",{\"children\":\"MLIR Tutorial DataFlow Analysis 에 대하여 - CPIST's blog\"}],[\"$\",\"meta\",\"1\",{\"name\":\"description\",\"content\":\"Writing DataFlow Analyses in MLIR\"}],[\"$\",\"link\",\"2\",{\"rel\":\"icon\",\"href\":\"/blog/favicon.ico?favicon.0b3bf435.ico\",\"sizes\":\"256x256\",\"type\":\"image/x-icon\"}],[\"$\",\"$L19\",\"3\",{}]]\n8:null\n"])</script></body></html>
