@@ -1,0 +1,34 @@
+---
+title: "MLIR docs PassManagement 에 대하여"
+date: "2025-12-20"
+summary: "Pass Infrastructure"
+tags: ["mlir", "Pass Infrastructure"]
+draft: false
+---
+
+1) Operation Pass가 기본 단위임.
+- MLIR에서 변환 / 최적화의 기본 추상화 단위는 Operation 이고, 패스는 "현재 operation(current operation)" 을 기준으로 동작함.
+- 모든 패스는 OperationPass 에서 파생되며, 멀티스레드/중첩 실행을 안전하게 하려고 강한 제약을 가짐.
+
+2) OperationPass 공통 제약(중요)
+패스가 runOnOperation() 을 실행할 때
+- 형제(sibling) operation을 보면 안된다. 
+  - 형제 및 그 아래에도 접근 하면 안됨.
+  - 다른 스레드가 병렬로 수정 중일 수도 있음
+  - 단, 조상(ancestor/parent) operation을 읽는 것은 허용함.
+- 현재 operation 아래에 중첩 된 것들만 수정이 가능함
+  - 조상 / 부모 blcok에 다른 op를 추가/삭제/변경 하는 것은 안됨
+  - 예외 : 현재 operation의 attribute는 자유롭게 수정이 가능함 
+    - 이말인 즉슨, 현재 op를 직접 바꿀 수 있는 유일한 통로라는 것
+- runOnOperation 호출 간 mutable 한 패스 상태를 유지하면 안됨
+  - 여러 op에 대해 실행 순서 보장이 없음
+  - 멀티스레딩 에서는 어떤 패스 인스턴스가 모든 op를 다 처리한다는 보장도 없음
+- 전역 mutable 상태를 금지함 - static 변수 같은
+- copy-constructible 이어야 한다.
+  - 패스 매니저가 병렬 처리를 위해 패스 인스턴스를 복제 가능
+
+=====================================================================
+
+요약해 보자면
+MLIR의 Forward Dataflow Analysis는 Lattice + ForwardDataFlowAnalysis + visitOperation(transfer function) 구조로 이루어지며, 
+단조적인 join 규칙과 pessimistic(top) 상태를 통해 안전하고 확장 가능한 분석을 가능하게 한다는 것이다.  
