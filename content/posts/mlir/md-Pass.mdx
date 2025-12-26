@@ -10,7 +10,7 @@ draft: false
 - MLIR에서 변환 / 최적화의 기본 추상화 단위는 Operation 이고, 패스는 "현재 operation(current operation)" 을 기준으로 동작함.
 - 모든 패스는 OperationPass 에서 파생되며, 멀티스레드/중첩 실행을 안전하게 하려고 강한 제약을 가짐.
 
-2) OperationPass 공통 제약(중요)
+* OperationPass 공통 제약(중요한 부분)
 패스가 runOnOperation() 을 실행할 때
 - 형제(sibling) operation을 보면 안된다. 
   - 형제 및 그 아래에도 접근 하면 안됨.
@@ -27,8 +27,175 @@ draft: false
 - copy-constructible 이어야 한다.
   - 패스 매니저가 병렬 처리를 위해 패스 인스턴스를 복제 가능
 
-=====================================================================
+2) Operation Pass 의 종류와 필터링에 대하여
+1. Op-Agnostic Pass (기본)
+- 기본은 op-agnostic : 어떤 operation 타입이든 패스 매니저가 대상으로 삼는 타입에서 실행이 됨.
+- 이런 패스는 자기가 어떤 op에서 돌지 가정을 하면 안된다. (canonicalize, cse)
+- 구현 포인트는 OperationPass<> (탬플릿 인자 X) + runOnOperation() 오버라이드
 
-요약해 보자면
-MLIR의 Forward Dataflow Analysis는 Lattice + ForwardDataFlowAnalysis + visitOperation(transfer function) 구조로 이루어지며, 
-단조적인 join 규칙과 pessimistic(top) 상태를 통해 안전하고 확장 가능한 분석을 가능하게 한다는 것이다.  
+2. Filtered Operation Pass
+필요하면 이 패스는 특정한 op/컨텍스트 에서만 실행 되도록 추가 필터링을 적용할 수 있다.
+A - 정적 스케줄 필터링 : canScheduleOn
+- bool canScheduleOn(RegisteredOperationName opInfo) const 로 어떤 op 타입에 스케줄 가능한지 제약을 선언함
+- FunctionOpInterface 를 구현한 op에서만 실행함.
+아주 중요한 상속 규칙은
+- 이 필터가 걸린 패스를 op-agnostic pass manager에 넣으면 그 pass manager(안의 모든 패스 포함)가 그 제약을 상속한다.
+- 그래서 any(cse, my-function-pass) 같은 파이프라인ㄷ 실제로는 FunctionOpInterface op들만 대상으로 cse 까지 같이 돌아버린다.
+
+B - 정적 필터링 
+- Op 타입 1개로 제한함 : OperationPass<func::FuncOp> 처럼 템플릿에 op 타입을 넣으면 자동 필터링이 됨
+- 인터페이스로 제한함 : InterfacePass<FunctionOpInterface> 기반으로 작성하면 자동 필터링이 됨
+
+3) Dependent Dialects
+- 패스가 어떤 dialect의 entity(ops/types/attrs 등)를 새로 만들 수 있다면, 그 dialect가 미리 로드 되어 있어야 함.
+  - 특히 멀티 스레드 pipline 시작 전
+- 이를 위해 패스는 getDependentDialects() 를 Override 해서 필요 dialect 목록을 명시적으로 선언해야 함.
+  - TableGen에서도 dependentDialects 필드로 선언이 가능
+
+4) Pass Initialization hook
+- 패스가 런타임에 만들면 비싼 상태를 갖는 경우
+  - 예시로 PDL Pattern bytecode compile case
+  - LogicalResult initialize(MLIRContext *context) 를 override 해 pipeline 1회 실행당 1번 초기화 가능
+- 여기서는 getContext / getOperation / getAnalysis 같은 per-run API 사용 금지 (현재 op가 없기 때문)
+  - 제공된 context 로만 작업 해야 함.
+- 실패 시 진단 메시지 출력 후 failure() 반환 : Pipeline 중단
+
+5) Analysis Management (분석) 모델
+- 분석은 변환 패스가 아니라 독립 클래스로, 요청 시 lazy 계산 + Cache 됨
+- 분석 클래스 요구사항
+  - 생성자 : (Operation*) 또는 (Operation*, AnalysisManager&)
+  - 대상 operation을 수정하면 안 됨
+  - AnalysisManager& 를 통해 의존 분석을 요청 가능
+1. 분석 무효화(invalidation) 제어
+  - bool isInvalidated(const PreservedAnalyses&) 로 보존 세트에 없더라도 실제로는 무효화할지를 더 정교하게 결정이 가능함
+  - 의존 분석이 있다면 그 무효화도 함께 확인해야 한다.
+2. 패스에서 분석 조회 API
+  - OperationPass가 제공함
+    - getAnalysis<> (없으면 생성)
+    - getCachedAnalysis<> (있을 경우에만)
+    - getCachedParentAnalysis<>
+    - getCachedChildAnalysis<>
+    - getChildAnalysis<> (없으면 생성함)
+3. 분석 보존 (PreservedAnalyses)
+  - 기본적으로 패스가 지나가면 분석은 다 무효화된다고 가정
+  - 바뀌지 않았거나 유지됨을 보장하면 패스가 명시적으로 표시해야 함
+    - markAllAnalysesPreserved()
+    - markAnalysesPreserved<A, B...>()
+
+6) Pass failure
+- 패스는 graceful fail이 가능함
+- 불변식이 깨져 IR이 유효하지 않을 수 있으면 signalPassFailure() 호출
+- 실패가 발생하면 
+  - 파이프라인의 나머지 패스 실행이 중단됨
+  - 최상위 PassManager::run 이 failure을 반환함
+
+7) Pass Manager 구조 : PassManager vs OpPassManager
+1. PassManager
+- 전체 파이프라인의 최상위 엔트리 + 전역 설정 담당
+- 동시에 top-level OpPassManager 역할도 함
+2. OpPassManager
+- 특정 중첩 레벨의 operation 들에 대해 실행될 패스들의 컬렉션
+- 두 종류
+  - op-specific: 특정 op 타입에 고정(anchor)
+  - op-agnostic: 특정 타입에 제한 없이 가능한 op들에 실행
+  - Anchor op 타입 요구조건은 
+    - 등록되어 있고, IsolatedFromAbove trait 이어야 한다는 점
+    - 현재 레벨 이상을 건드리면 SSA/use-list 등을 잘못 건드릴 위험이 있기 때문
+3. Nesting으로 파이프라인 구성
+  - nest<OpT>() : 특정 op 타입 레벨로 중첩 PM 생성
+  - nestAny() : op-agnostic 중첩 PM 생성
+  - 이 중첩은 IR의 Region 안 operation 구조적 중첩과 대응됨
+4. 실행 방식 (중요한 실행 모델)
+- 한 operation을 잡고 그 op에 걸린 패스들을 연속으로 전부 실행 한 다음, 다음 operation으로 넘어간다.
+- 효과는
+  - 함수 단위로 집중하여 캐시 / 지역성이 좋아지고 
+  - 함수 파이프라인을 병렬 실행 하여 멀티스레딩 시 작업(job) 구성 효율이 좋아짐.
+
+8) Dynamic Pass Pipelines (패스 내부에서 파이프라인 실행)
+- 어떤 Pass는 실행 중에 조건에 따라 추가 파이프라인을 돌리고 싶을 수 있다.
+  - inliner가 중간에 단순화 파이프라인을 실행하는 케이스
+- 이때 Pass::runPipeline(OpPassManager &, Operation *) 로 현재 op 또는 그 아래 op들에 대해 동적 파이프라인 실행 가능
+- 장점은 분석 / Instrumentation / PassManager 구성요소가 동적 파이프라인에도 제대로 연동된다는 점
+- 권장 사항은 Pass 내부에서 새 PassManager 를 만들기 보다 runPipeline을 사용함.
+- OpPassManager 는 copy-safe `->` 가능하면 파이프라인을 캐시해서 재사용함.
+
+9) Instance-Specific Pass Options (옵션)
+- 패스는 인스턴스별 옵션을 Option<>, ListOption<> 로 정의가 가능함
+- LLVM command line 스타일을 따른다.
+- ListOption은 콤마로 분리되지만, 원소 내부의 서브 범위 등은 콤마를 separator로 안 볼 수 있는 규칙이 있음
+
+* PassPipelineRegistration 옵션
+- 파이프라인 등록 시 PassPipelineOptions 를 상속한 옵션 구조체를 제공 가능함
+- 빌더 시그니쳐 : void (OpPassManager &pm, const Options&)
+
+10) Pass Statistics
+- 컴파일러가 뭘 얼마나 했는지를 패스 인스턴스 별로 카운트 / 집계함.
+- Pass::Statistic 을 사용함 (원자적 unsigned 처럼 증가 가능함)
+- 출력은
+  - API : PassManager::enableStatistics
+  - CLI : -mlir-pass-statistics, -mlir-pass-statistics-display (pipeline/tree vs list view)
+
+11) Pass Registration & Pipeline Registration
+1. PassRegistration
+- 패스 클래스를 텍스트 파이프라인에서 생성 가능하게 등록
+- getArgument() 가 텍스트 식별자, getDescription()이 요약 설명
+- 기본 생성 불가 패스는 "생성 콜백" 으로 등록이 가능함
+- copy-constructible + 데이터 공유 주의 (병렬 실행 때문)
+2. PassPipelineRegistration
+- 자주 쓰는 파이프라인 자체를 하나의 이름으로 등록함
+- OpPassManager에 패스를 추가하는 빌더 함수 (또는 람다) 제공된
+
+12) Textual Pass Pipeline Specification (문자열 파이프라인 문법)
+- 중첩 구조 / 패스 이름 / 파이프라인 이름 / 옵션을 문자열로 표현 함.
+- EBNF 핵심:
+  - op-anchor(elem, elem, ...)
+  - elem은 중첩 pipeline 이거나 pass-name / pass-pipeline-name + Option 이 가능함
+- op-anchor는 func.func, builtin.module 같은 op mnenmonic 또는 any
+- OpPassManager::printAsTextualPipeline(...) 로 라운드트립 지원하려면 Pass::getArgument() 구현 필요
+
+13) Declarative Pass Specification (TableGen 기반)
+- 패스도 operation 처럼 일부를 TableGen으로 선언이 가능함
+  - registration boilerplate 생성
+  - 옵션 / 통계 / 의존 dialect 선언
+  - 문서 (gen-pass-doc) 생성
+- gen-pass-decls
+  - register<PassName>() 와 그룹 등록 함수 생성
+  - MyPassOptions 구조체 생성
+  - impl::MyPassBase 같은 베이스 클래스 생성 (옵션 / 통계 멤버 포함)
+- 매크로 (GEN_PASS_REGISTRATION, GEN_PASS_DECL, GEN_PASS_DEF_...) 로 필요한 부분만 포함
+
+14) Pass Instrumentation
+- PassInstrumentation 으로 패스 실행/분석 계산 이벤트에 hook
+  - runBeforePipeline / runAfterPipeline
+  - runBeforePass / runAfterPass / runAfterPassFailed
+  - runBeforeAnalysis / runAfterAnalysis
+- PassManager에 addInstrumentation(...) 로 등록
+- Hook 호출은 스택처럼 (LIFO) before / after가 짝지어 실행됨
+- Instrumentation hook 은 thread-safe 하게 호출이 보장됨.
+
+* Standard Instrumentations 
+1. Pass Timing
+  - PassManager::enableTiming 또는 mlir-opt -mlir-timing
+  - 표시모드는
+    - list(-mlir-timing-display=list) / tree(기본)
+    - JSON 출력 (-mlir-output-format=json)
+  - 멀티스레드 에서는 User Time(총 CPU)과 Wall Time(최장 스레드) 의미 차이를 주의
+2. IR Printing
+  - 패스 전/후 IR 덤프 및 필터링
+    - -mlir-print-ir-before=..., -mlir-print-ir-after=...
+    - -mlir-print-ir-before-all, -mlir-print-ir-after-all
+    - -mlir-print-ir-after-change(변경된 경우만, 해시 기반)
+    - -mlir-print-ir-after-failure(실패 시만)
+    - -mlir-print-ir-module-scope(모듈 스코프 출력, threading disable 필요)
+    - -mlir-print-ir-tree-dir=...(디렉토리 트리로 파일 출력)
+    - -mlir-use-nameloc-as-prefix(named loc로 SSA 이름 프리픽스)
+
+15) Crash / Failure Reproduction (재현 파일 생성)
+  - 크래시나 패스 실패 시 reproducer(입력 IR + 파이프라인 설정) 을 .mlir로 덤프 가능
+  - 활성화
+    - API : PassManager::enableCrashReproducerGeneration
+    - CLI : mlir-pass-pipeline-crash-reproducer
+  - 재현 실행 : mlir-opt -run-reproducer
+  - Local reproducer (실패 직전 IR 포함) 도 가능함
+    - CLI: mlir-pass-pipeline-local-reproducer
+    - 단, 멀티스레딩 비활성화 필요(-mlir-disable-threading)
