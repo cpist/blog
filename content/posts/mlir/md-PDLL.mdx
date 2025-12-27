@@ -1,0 +1,168 @@
+---
+title: "MLIR docs PassManagement 에 대하여"
+date: "2025-12-21"
+summary: "PDLL - PDL Language"
+tags: ["mlir", "PDLL"]
+draft: false
+---
+
+MLIR Pattern Rewrite를 선언적으로 작성하기 위한 전용 프런트엔드 언어인 PDLL (PDL Language) 에 대해 알아보자. 
+
+1) PDLL은 무엇인가
+- MLIR의 패턴 매칭 / Rewrite (정규화, 최적화, 변환 등) 을 표현하기 위한 선언적 패턴 언어임.
+- MLIR의 핵심 구조 (값 / 타입 / 연산 / 속성 등) 에 대해 네이티브 하게 매칭과 생성을 할 수 있게 설계됨.
+- AOT (사전 컴파일) / JIT (실행 중 컴파일) 둘 다 목표로 함.
+- 설계 기반은 PDL IR abstraction(PDLOps) 이며 "매칭하고 싶은 IR을 거의 그대로 쓰는 느낌" 을 지향함.
+
+2) 왜 TableGen DRR (TDRR) 개선이 아니라 새 언어를 쓰는가?
+TDRR의 경우 TableGen의 DAG(dag) 기반으로 MLIR 패턴을 표현하는데, MLIR 구조와 TableGen 구조가 잘 안 맞아서 창의적인 우회가 늘어난다.
+아래와 같은 문제들이 있음.
+1. Multi-result ops
+- MLIR은 결과가 여러 개인 op가 흔하다.
+- TDRR에서는 결과들을 $results로 묶고 $results__0 같은 매직 네이밍 규칙 (실제로 쓴 표현..) 으로 접근함 
+  - 당연히 가독성과 안전성이 떨어짐
+- 이를 PDLL 에서는 threeResultOp.output1 같이 결과에 직접 접근이 가능함.
+
+2. Constraints 표현 위치 문제
+- TDRR은 제약이 "패턴 구조(dag) 밖의 별도 리스트" 로 빠지기 쉬워서, 무엇을 제약하는지 추적이 어려움.
+- PDLL은 HasNoUseOf(op.output2) 처럼 대상 근처에 제약을 바로 적용 가능
+
+3. 여러 연산을 동시에 치환/삭제
+- TDRR은 "단일 루트 DAG" 제약 때문에 루트가 아닌 op를 자연스럽게 replace 하기 어렵고 종종 패턴을 쪼개야 함.
+- PDLL은 replace를 여러 번 쓰는 식으로 더 직관적으로 표현이 가능함.
+
+4. 기존 언어에 DSL로 얹는 방식은 왜 아닌가?
+- 언어/버전/성능/의존성 (LLVM 프로젝트로서 새 런타임 의존성 부담)
+- 도구 지원(완전한 LSP/완성/시그니처 헬프 등) 문제
+- 또한 PDL IR이 제어흐름을 제한적으로 지원하는데, 호스트 언어(Python 등)의 풍부한 제어흐름과의 임피던스 미스매치가 사용자 불만을 만들 수 있음.
+
+여기서 임피던스 미스매치(impedance mismatch)는 전기에서 “서로 다른 임피던스 때문에 에너지가 제대로 전달되지 않는 현상”에서 온 비유인데,
+소프트 웨어쪽에서는 서로 다른 두 시스템(모델/언어/추상화)의 구조·규칙·표현력이 안 맞아서
+자연스럽게 연결하기 어렵고, 억지로 붙이면 코드가 지저분해지거나 제약/버그/예외가 늘어나는 상황을 말함.
+
+3) PDLL 파일 포함 (Include)
+- #include 지원.
+- .pdll 포함 : 텍스트 그대로 복사되어 같이 처리됨.
+- .td 포함 : ODS 정보(연산/제약/인터페이스 등)를 가져와서 PDLL에서 연산 이름/결과 그룹 이름 같은 “더 강력한” 사용이 가능해짐.
+
+4) Pattern의 구조와 메타데이터
+* 패턴 기본 형태
+- `Pattern {...}`
+- 또는 한 줄 람다 : `Pattern => replace ...;`
+- 패턴 본문은 크게
+  - match section: 마지막 operation rewrite statement 이전의 모든 문장(입력 IR 매칭)
+  - rewrite section: 마지막 문장(반드시 operation rewrite statement)부터 시작
+* 메타데이터
+  - benefit(n): 패턴 우선순위. 기본값은 매치 섹션의 입력 op 개수 (큰 패턴이 더 이득)
+  - recusion 플래그(의미는 재귀 적용 안전): 같은 패턴이 결과에 다시 적용되는 상황에서 무한 루프 방지. 디폴트는 재귀 적용 안 함, 명시할 경우 재귀 적용 가능.
+
+5) 변수 (Variables)와 바인딩 (binding)
+* 변수는 IR 엔티티를 나타냄
+  - Value, Op, Type, Attr, ValueRange, TypeRange 등
+  - let value: Value;
+* 바인딩이 매우 중요함
+  - match 섹션에서는 변수는 initializer 또는 제약 / 사용을 통해 입력 IR의 어떤 것인지 식별되어야 함.
+  - 특히 패턴의 루트 op는 마지막의 operation rewrite statement 에서 확실히 바인딩되어야 함.
+  - 바인딩이 안된 변수를 rewrite에서 쓰면 어떤 IR 값을 의미하는지 알 수 없음이 되어 패턴이 성립하지 않음.
+* 변수에 제약 붙이기
+  - let v: [Value, HasOneUse]; 처럼 선언 시 제약 리스트를 붙일 수 있음.
+  - rewrite 섹션에서는 제약이 주로 타입 결정 용도로만 쓰이고, match에서처럼 체크를 늘리진 않는다는 점을 강조함.
+* inline 변수 정의 & 와일드카드
+  - `op<...>(value: Value)처럼` 사용 지점에서 바로 정의 가능.
+  - 안 쓸 변수는 _로 와일드카드 변수 가능(스코프 밖에서 참조 불가).
+
+6) Operation 표현식(`op<...>`)
+MLIR의 “generic assembly” 느낌과 유사
+```
+op<dialect.op>(operands...) {attrs...} -> (resultTypes...)
+```
+
+핵심 규칙:
+- 이름
+  - match에서는 `op<>`로 조건만 맞으면 아무 op나 가능.
+  - rewrite 에서는 이름이 필수임.
+- operands
+  - 생략 가능( match: 제약 없음 / rewrite: operands 없음으로 간주).
+  - ValueRange 하나면 “모든 operands”.
+  - Value/ValueRange를 여러 개 쓰면 ODS의 operand group에 대응(ODS 정보가 중요).
+- results
+  - 생략 가능( match: 제약 없음 / rewrite: 결과 타입 추론 가능).
+  - TypeRange 하나면 “모든 result types”.
+  - 여러 개면 ODS result group에 대응.
+
+* 결과 타입 추론(Inferred Results)
+rewrite에서 결과 타입을 생략하거나 아직 바인딩되지 않으면 추론됨. 대표 케이스:
+  - replace에서 교체 op의 결과 타입은 교체당하는 op의 결과 타입에서 추론 가능
+  - 다른 추론이 불가하면 InferTypeOpInterface로 추론 시도
+
+* 결과 접근
+  - ODS가 있으면 resultOp.result 또는 resultOp.0처럼 이름/인덱스 접근 가능.
+  - Op는 상황에 따라 Value 또는 ValueRange로 암시적 변환(단일 결과면 Value).
+
+* Unregistered op
+  - ODS 정보가 없으면 이름 기반 그룹을 모르므로 .0 같은 개별 result 인덱싱만 가능.
+
+7) Attr/Type 리터럴
+- `attr<"...">` : 텍스트 형태로 MLIR attribute 리터럴 지정
+- `type<"...">` : 텍스트 형태로 MLIR type 리터럴 지정
+
+8) Tuple
+- 여러 값을 한 덩어리로 반환/전달하기 위한 기본 구조.
+- `(op<...>, attr<...>, type<...>)` 형태.
+- .0, .1 인덱싱 또는 name = ...로 이름 기반 접근 가능.
+- 특히 Constraint/Rewrite가 여러 결과를 반환할 때 핵심.
+
+9) Constraints 
+match 섹션에 추가 체크를 주입하는 메커니즘. (제일 중요한 것 같기도..)
+
+1. Core Constraints (타입 계열)
+- 변수 선언의 constraint list 에서만 사용
+  - Attr(옵션: `Attr<typeVar>`로 타입 제약)
+  - Op 또는 `Op<dialect.op>`
+  - Type, TypeRange
+  - Value/ValueRange (옵션으로 타입/타입레인지 제약)
+
+2. PDLL로 Constraint 정의
+함수 처럼 정의
+  - 입력/출력 타입, 본문, return 가능
+  - 여러 결과는 tuple로 반환
+  - 결과 타입은 시그니처 생략 시 return에서 추론 가능
+  - 단일 람다 형태 지원: `Constraint Foo(x: Value) => ...;`
+
+3. Native Constraints
+C++에서 등록해서 쓰거나, PDLL에서 AOT용으로 C++ 코드 블록 `[{ ... }]`로 직접 정의 가능.
+  - rewriter에 접근 가능
+  - 반환은 LogicalResult
+  - 타입 매핑 규칙
+    - 기본 core constraint는 mlir 대응 타입으로 매핑 (Value, TypeRange 등)
+    - `Op<dialect.name>`는 ODS가 있으면 해당 C++ Op 클래스 타입으로 매핑될 수 있음
+    - ODS에서 가져온 Attr/Type/Interface constraint들도 특정 native type으로 매핑될 수 있음
+
+* Inline constraint
+  - 패턴/다른 constraint/rewriter 내부에도 constraint를 정의할 수 있음.
+  - 이름을 생략하고 즉석에서 `Constraint(value: Value) { ... }(inputValue);` 식으로 호출 가능.
+
+10) Rewriters(Rewrite 로직)
+rewrite 섹션에서 IR 변환을 정의.
+1. Operation Rewrite Statements
+  - `erase op<...>;` : op 삭제
+  - replace root with ...; : op를 값(들) 또는 다른 op로 교체
+    - 교체 op의 결과 타입은 보통 대상 op의 결과 타입으로 추론 가능
+  - `rewrite root with { ... };` : 루트를 기준으로 중첩 리라이트 블록 실행
+    - 루트가 자동으로 replace/erase 되지 않음. 내부에서 명시해야 함.
+
+2. PDLL로 Rewrite 정의(함수 스타일)
+  - Rewrite BuildFooOp(value: Value) -> `Op { return op<...>; }`
+  - 여러 결과는 tuple 반환(이름 가능)
+  - 결과 타입은 시그니처 생략 시 return에서 추론 가능
+  - 한 줄 람다 지원(표현식 또는 operation rewrite statement)
+
+3. Native Rewriters
+  - C++에서 등록하거나, PDLL에서 `[{ ... }]` 코드블록으로 AOT 정의 가능.
+  - 반환 규칙은
+    - 결과 0개: void
+    - 결과 1개: 해당 타입
+    - 결과 N개: `std::tuple<...>`
+
+* Inline rewriter
+  - constraint처럼 패턴/다른 rewriter 내부에 지역적으로 정의 가능.
