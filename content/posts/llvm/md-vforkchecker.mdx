@@ -1,0 +1,76 @@
+---
+title: "LLVM VforkChecker"
+date: "2025-12-28"
+summary: "Clang Static Analyzer - VforkChecker analyze"
+tags: ["llvm", "Static Analyzer", "VforkChecker"]
+draft: false
+---
+무슨 위험을 잡는지 / 어떻게 상태를 추적하는지 / 어디가 허술할 수 있는지 관점으로 보면 분석 포인트가 잡힌다.
+
+1) 이 체커가 모델링 하는 vfork 이후 (child) 상태 정의
+- 핵심 상태는 VforkResultRegion trait 하나로만 표현 됨
+  - VFORK_RESULT_INVALID `→` parent 상태(= child 아님)
+  - VFORK_RESULT_NONE `→` child 인데 “vfork 리턴값이 아직 어떤 변수에 할당되었는지 모름” (혹은 할당 안 함)
+  - 그 외 MemRegion* `→` child 인데 “vfork 결과가 저장된 LHS region”을 기억
+
+* 분석 포인트
+  - child 여부 판별이 != VFORK_RESULT_INVALID로 단순화돼 있어서, vfork 이후 흐름에서 child 상태가 얼마나 오래 유지되는지가 정확도(오탐/미탐)에 직결됨.
+  - VFORK_RESULT_NONE일 때는 사실상 어떤 메모리도 써서는 안 된다에 가까운데, 지금 구현은 “LHS가 NONE인 상황에서의 예외 처리”가 checkBind 로직에서 어떻게 동작하는지 확인 포인트.
+
+2) 상태 전이: checkPostCall에서 vfork 호출을 분기하는 방식
+- checkPostCall에서
+1. parent 상태에서만 처리(이미 child면 return)
+2. isVforkCall()로 vfork 여부 확인
+3. assume(*DVal)로 반환값 분기 `→` ParentState/ChildState
+4. child 쪽에만 VforkResultRegion = LhsDeclReg 세팅
+
+* 분석 포인트
+  - ParentState/ChildState 매핑이 “0 vs 비0”을 제대로 반영하는지가 관건. 현재는 assume(*DVal)로 (true/false) 분기만 하는데, 이 “true가 0인지 비0인지”는 DefinedOrUnknownSVal의 의미/제약에 따라 해석이 달라질 수 있음.
+    - 즉, “child=0”을 명시적으로 강제하지 않고 있는지 점검 포인트.
+  - parseAssignment(P)로 LHS를 찾는데, ParentMap으로 origin expr의 parent를 찾는 방식이라 다양한 코드 패턴에서 LHS 인식이 실패할 수 있음.
+    - 예: if ((pid=vfork())==0) ... 같은 경우, parent가 BinaryOperator/ParenExpr/ImplicitCastExpr로 감싸질 수 있음.
+  - LHS를 못 찾으면 VFORK_RESULT_NONE로 처리되는데, 이게 이후 write 허용 판단에 영향을 줌.
+
+3) “쓰기 금지” 구현의 정확도: checkBind
+- 동작: child면 모든 바인딩(대입/초기화 등)을 감시하고,
+  - LHS region(MR)이 vfork LHS region(VforkLhs)과 같으면 허용
+  - 아니면 버그 리포트
+
+* 분석 포인트
+  - MR 비교가 포인터 동일성(MR == VforkLhs)인데, region이 더 세분화(필드/배열 요소/타입 캐스팅 등)되면 “같은 변수의 부분 region”을 동일하다고 보지 못할 수 있음.
+    - 예: pid가 struct field라거나 *p 형태로 저장되는 경우.
+  - “stack 변수 변경 금지” 취지는 넓지만, 이 구현은 메모리 region 단위로 막기 때문에
+    - 어떤 store/bind 이벤트가 발생하는지(예: ++x, compound assign, initializer 등)에서 coverage가 충분한지 확인 포인트.
+  - AtDeclInit 파라미터를 받지만 로직에서 안 씀 → 선언 초기화와 일반 대입을 구분해야 하는지 검토 포인트.
+
+4) “호출 금지” 구현의 한계: checkPreCall
+- child면 allowlist에 없는 모든 호출을 금지.
+- allowlist는 _exit/_Exit + exec 계열.
+
+* 분석 포인트
+  - Call.getCalleeIdentifier()가 nullptr일 수 있는 케이스(함수 포인터/가상 호출/람다 호출 등)에서
+    - isCallExplicitelyAllowed(nullptr, C)가 결국 false가 되어 전부 bug가 날 수 있음(오탐 가능).
+  - allowlist가 “manpage 기준”이라고 주석에 있는데, 실제 플랫폼/표준에 따라 허용되는 호출 범위는 더 엄격하거나(특히 async-signal-safe와 혼동), 문맥에 따라 다를 수 있음.
+  - allowlist 초기화가 lazy + mutable SmallPtrSet `→` thread safety는 analyzer 특성상 괜찮지만, ASTContext의 IdentifierInfo 포인터를 캐시하는 설계가 안전한지(컨텍스트 수명) 확인.
+
+5) “return 금지” 구현: checkPreStmt(ReturnStmt)
+- child면 무조건 “Return prohibited… call _exit() instead”.
+
+* 분석 포인트
+- “return”의 의미를 더 엄격히 보려면, vfork 이후 child에서 함수를 빠져나가는 모든 경로(return뿐 아니라 goto, longjmp류, exception throw 등)는 어떻게 취급되는지.
+- 현 구현은 ReturnStmt만 잡음 `→` 미탐 영역이 어디인지 정리 포인트.
+
+6) isVforkCall 판별 로직의 취약점
+- CLibrary function이면서 identifier가 "vfork"인 FunctionDecl만 인정.
+
+* 분석 포인트
+  - 매크로/래퍼/인터포지션된 vfork(예: 사용자 정의 vfork 래핑 함수)나 ::vfork가 아닌 다른 선언 경로에서 호출될 때 놓칠 수 있음.
+  - 반대로 “이름만 vfork”인데 다른 의미면? isCLibraryFunction이 방어해주지만, 그 판정의 범위도 체크 포인트.
+
+7) 보고(리포트) 품질/디버깅 포인트
+- reportBug는 그냥 메시지 1줄 + TODO로 “vfork call mark”가 남아있음.
+
+* 분석 포인트
+  - 실제 사용자 입장에선 “어떤 vfork에서 child가 되었는지” 트래킹이 중요하니,
+    - BugReportVisitor 추가, vfork 호출 지점과 금지 행위 지점을 함께 보여주는지 개선 여지.
+  - 동일 경로에서 반복 리포트가 나올 가능성(같은 노드에서 여러 번)도 점검.
