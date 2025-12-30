@@ -58,6 +58,62 @@ LLVM / Clang Static Analyzer 의 핵심 구성 요소 중 하나이다.
 - 오염 분석 (checkTaintedness)
   - 사용자로부터 입력받은 값이 할당 크기(size)로 들어올 경우, 매우 큰 값이 입력되어 정수 오버플로나 서비스 거부(DoS) 공격으로 이어질 수 있음을 경고함.
 
+5) 상태 전이 모델링 (State Machine Implementation)
+메모리 심볼의 상태를 단순히 저장하는 것이 아닌 Immutable Map을 통해 관리함
+
+```
+REGISTER_MAP_WITH_PROGRAMSTATE(RegionState, SymbolRef, RefState)
+```
+
+이 매크로는 ProgramState 내부에 SymbolRef(포인터 심볼) 와 RefState(상태 정보)를 매핑하는 테이블을 생성함.
+분석기가 경로를 탐색할 때 마다 Map이 복사되는 것이 아니라, 변경된 부분만 공유(Persistent Data Structure) 되어 효율성을 극대화 함.
+
+상태 전이의 핵심 로직
+- 할당 때는 (MallocUpdateRefState): 심볼을 Allocated 상태로 등록.
+- 해제 때는 (FreeMemAux): 상태를 Released로 변경. 만약 이미 Released라면 HandleDoubleFree 호출.
+- 사용 때는 (checkUseAfterFree): 상태가 Released인 심볼에 접근하면 에러 보고.
+
+6) evalCall vs checkPreCall/checkPostCall
+코드에서 함수 호출을 처리하는 방식이 두 가지로 나뉨. 
+이 차이를 아는 것이 정적 분석기 코드 분석의 핵심
+
+- evalCall (모델링): malloc, realloc 같은 시스템 함수를 만났을 때, 분석기가 "이 함수의 동작은 내가 직접 정의하겠다"라고 선언하는 것. 
+  - 실제 함수의 본문을 분석하는 대신, 리턴값으로 가상의 심볼을 생성함.
+
+- checkPreCall (검증): 함수가 실행되기 직전에 인자값이 유효한지(예: 이미 해제된 포인터를 free에 넘기지는 않는지) 검사함.
+
+- checkPostCall (사후 처리): 함수 실행 직후에 상태를 업데이트함. (예: 스마트 포인터 생성자가 호출된 후 소유권 이전 처리)
+
+7) 정교한 예외 처리 (False Positive Suppression)
+정적 분석기에서 가장 어려운 것은 "버그가 아닌데 버그라고 하는 것"을 막는 일임. 
+이 코드에는 이를 위한 고도의 기교가 숨어 있음.
+
+1. 스마트 포인터와 임시 객체 (isRvalueByValueRecord)
+C++에서 임시 객체가 값으로 전달될 때 소멸자가 호출되는 시점이 복잡함. 
+이 코드는 해당 객체 내부에 스마트 포인터 필드가 있는지 검사하고, 있다면 메모리 누수 보고를 일시적으로 유예하거나 Escaped 처리하여 오탐을 줄임.
+
+2. 아토믹 연산과 참조 카운팅
+```
+if (isReferenceCountingPointerDestructor(DD)) { ... }
+```
+참조 카운팅 기반의 객체(shared_ptr 등)는 참조 횟수가 0이 될 때만 메모리를 해제함. 
+이 체커는 소멸자 내부에 fetch_add나 fetch_sub 같은 아토믹 연산이 있다면, 이는 참조 카운팅 로직일 확률이 높다고 보고 분석의 엄격함을 조절함.
+
+8) BugVisitor를 통한 원인 추적
+버그 리포트가 단순히 "여기서 메모리 누수임"이라고 말하면 개발자는 이해하기 어려움. 
+이 코드의 MallocBugVisitor는 Exploded Graph(분석기가 지나온 경로 그래프)를 역추적함.
+
+- 역추적 로직: 현재 에러가 난 지점에서 뒤로 가면서 "이 메모리가 어디서 할당되었는가?"를 찾아내어 리포트에 **"메모리가 여기서 할당되었습니다"**라는 노트를 추가해줌. (getAllocationSite 함수)
+
+9) 테인드 데이터 분석 (checkTaintedness)
+```
+void MallocChecker::checkTaintedness(..., const SVal SizeSVal, ...) const
+```
+
+이 부분은 보안 분석의 핵심임. 
+외부에서 들어온 값(SizeSVal)이 malloc의 인자로 쓰일 때, 이 값이 너무 크지는 않은지 검사함. 
+만약 사용자가 제어 가능한 값이 검증 없이 할당 크기로 쓰인다면 이를 **"Tainted Memory Allocation"**으로 분류하여 보안 취약점으로 보고함.
+
 =====================================================================
 
 요약해 보자면 이 파일은 상태 머신(State Machine) 기반의 분석 엔진임. 
