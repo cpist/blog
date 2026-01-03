@@ -1,0 +1,43 @@
+---
+title: "LLVM 자체에 대해서"
+date: "2026-01-03"
+summary: "What is LLVM"
+tags: ["llvm", "Basic"]
+draft: false
+---
+
+1) LLVM Project의 전체 구성 (Top-level)
+llvm-project는 수많은 서브 프로젝트가 모여 있는 모노레포(Monorepo) 구조임.
+컴파일러의 3단계 구조 (Frontend - Optimizer - Backend) 가 소스 코드 상에 어떻게 배치되어 있는지, 핵심 디렉토리를 중심으로 확인해 보자.
+
+| 분류 | 디렉토리 명 | 역할 |
+| :--- | :--- | :--- |
+| **Frontend** | `clang/`<br/>`flang/` | • C, C++, Objective-C용 프론트엔드<br/>• Fortran용 프론트엔드 |
+| **Core** | `llvm/` | LLVM 심장부 (Optimizer, Backend 등) |
+| **IR** | `mlir/` | MLIR 프레임워크 및 Dialect 정의 |
+| **Tool** | `lld/`, `lldb/` | LLVM 전용 링커 및 디버거 |
+| **Runtime** | `libcxx/`<br/>`compiler-rt/` | C++ 표준 라이브러리 및 런타임 지원 |
+
+2) LLVM Core (llvm/)의 내부 아키텍처
+컴파일러 최적화와 코드 생성 부분은 대부분 llvm/lib/ 아래에 모여있음
+
+1. IR (중간 표현) 정의: llvm/lib/IR/
+- 컴파일러의 데이터 구조인 Instruction, Function, Module, BasicBlock 등이 정의된 곳
+- 모든 패스(Pass)들이 이 IR을 주무르고 변형
+
+2. Optimizer (Middle-end): llvm/lib/Transforms/ & Analysis/
+- 가장 핵심적인 로직이 들어있는 곳으로, 다시 목적별로 나뉨
+    - Analysis/: 코드를 바꾸지는 않고 분석만 함. (예: 이 루프는 몇 번 도는가? 이 포인터는 어디를 가리키는가?)
+    - Transforms/Scalar/: instcombine, gvn 등 스칼라 변수 대상 최적화
+    - Transforms/Vectorize/: Loop Vectorize 등 SIMD 최적화
+    - Transforms/IPO/: Inter-procedural Optimization. 함수 간의 관계를 분석해 최적화(Inlining 등)
+
+3. Backend (Target) : llvm/lib/Target/
+타겟 하드웨어별 코드가 모여 있는 곳
+    - Target/X86/, Target/ARM/, Target/RISCV/ 등
+    - 각 디렉토리 안에는 해당 하드웨어의 레지스터 구조, 명령어 셋(ISA) 정의(.td 파일), 인스트럭션 셀렉션 로직이 들어있음
+
+3) 이 위치에서는 이 소스를
+    - C++ 코드가 어떻게 IR로 바뀌지는지 알고 싶다면 : clang/lib/CodeGen/
+    - 최적화 패스 하나를 뜯어보고 싶다면 : llvm/lib/Transforms/Scalar/ (예: GVN.cpp)
+    - 어셈블리가 생성되는 최종 단계를 보고 싶다면 : llvm/lib/Target/[TargetName]/
