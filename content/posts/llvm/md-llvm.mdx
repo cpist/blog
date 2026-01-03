@@ -12,11 +12,11 @@ llvm-project는 수많은 서브 프로젝트가 모여 있는 모노레포(Mono
 
 | 분류 | 디렉토리 명 | 역할 |
 | :--- | :--- | :--- |
-| **Frontend** | `clang/`<br/>`flang/` | • C, C++, Objective-C용 프론트엔드<br/>• Fortran용 프론트엔드 |
+| **Frontend** | `clang/`, `flang/` | C, C++, Fortran용 프론트엔드 |
 | **Core** | `llvm/` | LLVM 심장부 (Optimizer, Backend 등) |
 | **IR** | `mlir/` | MLIR 프레임워크 및 Dialect 정의 |
 | **Tool** | `lld/`, `lldb/` | LLVM 전용 링커 및 디버거 |
-| **Runtime** | `libcxx/`<br/>`compiler-rt/` | C++ 표준 라이브러리 및 런타임 지원 |
+| **Runtime** | `libcxx/`, `compiler-rt/` | C++ 표준 라이브러리 및 런타임 지원 |
 
 2) LLVM Core (llvm/)의 내부 아키텍처
 컴파일러 최적화와 코드 생성 부분은 대부분 llvm/lib/ 아래에 모여있음
