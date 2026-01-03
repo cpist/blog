@@ -10,13 +10,26 @@ draft: false
 llvm-project는 수많은 서브 프로젝트가 모여 있는 모노레포(Monorepo) 구조임.
 컴파일러의 3단계 구조 (Frontend - Optimizer - Backend) 가 소스 코드 상에 어떻게 배치되어 있는지, 핵심 디렉토리를 중심으로 확인해 보자.
 
-| 분류 | 디렉토리 명 | 역할 |
-| :--- | :--- | :--- |
-| **Frontend** | `clang/`, `flang/` | C, C++, Fortran용 프론트엔드 |
-| **Core** | `llvm/` | LLVM 심장부 (Optimizer, Backend 등) |
-| **IR** | `mlir/` | MLIR 프레임워크 및 Dialect 정의 |
-| **Tool** | `lld/`, `lldb/` | LLVM 전용 링커 및 디버거 |
-| **Runtime** | `libcxx/`, `compiler-rt/` | C++ 표준 라이브러리 및 런타임 지원 |
+1. Frontend (언어 분석)
+clang/: C, C++, Objective-C를 위한 프론트엔드. 소스 코드를 분석하여 AST를 생성.
+flang/: Fortran 언어를 위한 프론트엔드.
+
+2. Core (Middle-end / Backend)
+llvm/: LLVM의 심장부.
+- 플랫폼 독립적인 Optimizer와 Backend 로직이 포함.
+- 각종 전역 최적화 도구 및 분석 패스가 들어있음.
+
+3. Multi-Level IR
+mlir/: 다양한 수준의 중간 표현(IR)을 다루기 위한 프레임워크.
+- 특정 도메인에 최적화된 각종 Dialect들을 정의.
+
+4. Linker & Debugger
+lld/: LLVM 프로젝트 전용 고성능 링커.
+lldb/: LLVM 기반의 강력한 디버거.
+
+5. Runtime Libs (실행 지원)
+libcxx/: C++ 표준 라이브러리 구현체.
+compiler-rt/: 저수준 런타임 지원 코드 및 Sanitize 도구(ASan, TSan 등)를 포함.
 
 2) LLVM Core (llvm/)의 내부 아키텍처
 컴파일러 최적화와 코드 생성 부분은 대부분 llvm/lib/ 아래에 모여있음
