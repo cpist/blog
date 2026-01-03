@@ -7,7 +7,7 @@ export async function generateStaticParams() {
   return getAllPosts().map((p) => ({ slug: p.slug.split("/") }));
 }
 
-export async function generateMetadata(props: { params: Promise<{ slug: string[] }> }) {
+export async function generateMetadata(props: { params: Promise<{ slug:string[] }> }) {
   const { slug } = await props.params;
   const joined = slug.join("/");
   const post = getPostBySlug(joined);
@@ -25,9 +25,12 @@ export default async function PostPage(props: { params: Promise<{ slug: string[]
   const post = getPostBySlug(joined);
   if (!post) return notFound();
 
+  const source = post.content.replace(/(\d+)\)/g, "$1\\)");
   const { content } = await compileMDX({
-    source: post.content,
-    options: { parseFrontmatter: false },
+    source,
+    options: {
+      parseFrontmatter: false,
+    },
   });
 
   return (
