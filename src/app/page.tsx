@@ -12,7 +12,7 @@ function prettyCategoryName(category: string) {
   const map: Record<string, string> = {
     "mlir": "MLIR",
     "llvm": "LLVM",
-    "compiler-paper": "Compiler Paper",
+    "paper": "PAPER",
     "personal": "Personal",
     "etc": "ETC",
   };
