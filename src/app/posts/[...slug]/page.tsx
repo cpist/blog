@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getAllPosts, getPostBySlug } from "@/lib/posts";
 import { compileMDX } from "next-mdx-remote/rsc";
+import Giscus from "@/components/Giscus";
 
 export async function generateStaticParams() {
   // p.slug = "mlir/hello-world" -> ["mlir", "hello-world"]
@@ -46,6 +47,8 @@ export default async function PostPage(props: { params: Promise<{ slug: string[]
       {post.frontmatter.summary && <p style={{ color: "#333" }}>{post.frontmatter.summary}</p>}
       <hr style={{ border: 0, borderTop: "1px solid #eee", margin: "18px 0" }} />
       <div className="prose">{content}</div>
+      <hr style={{ border: 0, borderTop: "1px solid #eee", margin: "36px 0" }} />
+      <Giscus />
     </article>
   );
 }
