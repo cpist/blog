@@ -25,3 +25,27 @@ draft: false
 - 그래픽 드라이버 업데이트: 삼성 업데이트 대신 인텔 공식 홈페이지에서 최신 Arc Graphics 드라이버를 직접 내려받아 설치. (가장 효과적인 해결책)
 - 투명도 효과 끄기: 설정 > 개인 설정 > 색 > 투명도 효과를 '끔'으로 설정합니다.
 - 시각 효과 제한: 제어판 > 시스템 > 고급 시스템 설정 > 성능(설정)에서 **'최적 성능으로 조정'**을 선택하면 dwm.exe의 부담이 크게 줄어듭니다.
+
+3. Command
+```
+cmake -G Ninja -S llvm -B build \
+  -DLLVM_ENABLE_PROJECTS="mlir;clang" \
+  -DLLVM_TARGETS_TO_BUILD="X86" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DLLVM_ENABLE_ASSERTIONS=ON \
+  -DCMAKE_C_COMPILER=clang \
+  -DCMAKE_CXX_COMPILER=clang++ \
+  -DLLVM_USE_LINKER=lld \
+  -DLLVM_PARALLEL_LINK_JOBS=1 \
+  -DBUILD_SHARED_LIBS=ON \
+  -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+  -DLLVM_CCACHE_BUILD=ON
+
+// 이후 아래 커맨드 진행
+ninja -C build -j4
+```
+
+완료 되면 아래와 같이 잘 빌드 되었는지 mlir-opt 실행을 확인해 보자.
+```
+./build/bin/mlir-opt --version
+```

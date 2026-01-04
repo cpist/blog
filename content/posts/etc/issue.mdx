@@ -1,0 +1,71 @@
+---
+title: "Issue 처리"
+date: "2026-01-04"
+summary: "LLVM / MLIR Issue Report 방법 관련"
+tags: ["etc", "Tip"]
+draft: false
+---
+
+1) 아래와 같이 에러가 났었음.
+[Link](https://github.com/llvm/llvm-project/issues/174090)
+
+```
+ld.lld: error: undefined symbol: llvm::identify_magic(llvm::StringRef)
+>>> referenced by DTLTO.cpp
+>>>                lib/DTLTO/CMakeFiles/LLVMDTLTO.dir/DTLTO.cpp.o:(llvm::lto::DTLTO::isThinArchive(llvm::StringRef))
+
+ld.lld: error: undefined symbol: llvm::lto::InputFile::getName() const
+>>> referenced by DTLTO.cpp
+...
+ld.lld: error: undefined symbol: llvm::lto::LTO::~LTO()
+>>> referenced by DTLTO.cpp
+>>>                lib/DTLTO/CMakeFiles/LLVMDTLTO.dir/DTLTO.cpp.o:(llvm::lto::DTLTO::~DTLTO())
+```
+
+이런 에러로그가 나왔었고, 
+보통은 아래와 같이 llvm-project/llvm 에서 에러가 난 심볼을 검색해 봄.
+
+```
+grep -r "identify_magic" llvm/include llvm/lib
+```
+
+- 의존성 확인을 확인해서 해당 심볼이 llvm/lib/BinaryFormat 등에 정의되어 있다면
+  - llvm/lib/DTLTO/CMakeLists.txt에 해당 컴포넌트를 추가해야 하고
+- 만약 이슈 등록했던 것처럼 LTO를 추가했을 때 순환 참조가 발생한다면
+  - DTLTO와 LTO 중 누가 누구를 참조하는 것이 설계상 맞는지(혹은 공통 부분을 분리해야 하는지)를 결정하는 것이 진정한 근본적 해결 방안이다.
+
+2) 그런데 4일 뒤 해결이 되었는데
+어떤 패치가 있었던것 같음.
+아래와 같이 검색해 보면 됨.
+
+```
+git log --since="4 days ago" --oneline -- llvm/lib/DTLTO llvm/lib/LTO
+
+// 결과는 아래와 같이 나옴.
+c4387734322b [LLVM][ADT] Migrate users of `make_scope_exit` to CTAD (#174030)
+d660ef70ac88 [DTLTO] Add missing link dependencies on BinaryFormat and Object
+24fb00dd2f43 [lld][dtlto] Invert dependency edge from LTO->DTLTO to DTLTO->LTO
+```
+
+특정 커밋 내용 확인은 
+1. 아래처럼 주소 입력해서 브라우저 창에서 바로 찾아봐도 되고
+```
+github.com/llvm/llvm-project/commit/앞글자7~8자리
+```
+
+2. git 터미널에서 상세 내용을 봐도 되고
+```
+// 특정 커밋의 변경 내용(diff) 확인
+git show d660ef70ac88
+
+// 해당 커밋이 포함된 파일 목록만 확인
+git show --stat 24fb00dd2f43
+```
+
+3. Github 이슈 / PR 번호로 찾아도 된다.
+LLVM은 커밋 메시지 끝에 (#번호)를 붙이는 규칙이 있기 때문. 
+c4387734322b 메시지 끝의 #174030을 보고 아래 주소로 접속하면 관련 논의 내용을 다 볼 수 있음. 
+즉 이렇게 github.com/llvm/llvm-project/pull/174030
+
+
+
