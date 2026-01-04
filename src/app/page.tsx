@@ -13,6 +13,7 @@ function prettyCategoryName(category: string) {
     "mlir": "MLIR",
     "llvm": "LLVM",
     "paper": "PAPER",
+    "triton": "TRITON",
     "personal": "Personal",
     "etc": "ETC",
   };
