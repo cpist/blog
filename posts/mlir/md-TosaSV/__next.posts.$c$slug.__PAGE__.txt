@@ -1,0 +1,80 @@
+1:"$Sreact.fragment"
+15:I[80852,["/blog/_next/static/chunks/796e69ae18b2784c.js","/blog/_next/static/chunks/631eeae4923b8465.js"],"default"]
+16:I[97367,["/blog/_next/static/chunks/ff1a16fafef87110.js","/blog/_next/static/chunks/247eb132b7f7b574.js"],"OutletBoundary"]
+17:"$Sreact.suspense"
+:HL["/c/Users/tinyf/Desktop/Capture/Capture-1.png","image"]
+2:T777,// MyTosaAnalysis.cpp
+#include "mlir/Dialect/Tosa/IR/TosaOps.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"  // func::FuncOp를 위해 필요
+#include "mlir/IR/BuiltinTypes.h"         // ShapedType을 위해 필요
+#include "mlir/Pass/Pass.h"
+
+using namespace mlir;
+
+namespace {
+// 1. PassWrapper의 두 번째 인자는 실제 구현될 베이스 클래스임.
+struct MyTosaAnalysisPass 
+    : public PassWrapper<MyTosaAnalysisPass, OperationPass<func::FuncOp>> {
+  
+  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(MyTosaAnalysisPass)
+
+  // 최신 MLIR에서는 아래 함수들을 virtual로 인식시키기 위해 
+  // StringRef를 반환하는 오버라이딩이 필요.
+  StringRef getArgument() const final { return "my-tosa-analysis"; }
+  StringRef getDescription() const final { return "TOSA Conv2D 커널 크기 정적 검증"; }
+
+  void runOnOperation() override {
+    // getOperation()은 이제 func::FuncOp를 반환.
+    func::FuncOp func = getOperation();
+
+    func.walk([&](tosa::Conv2DOp op) {
+      // getType() 뒤에 바로 .cast를 쓰는 것보다 
+      // llvm::dyn_cast 또는 llvm::cast를 사용하는 것이 더 안전함.
+      auto weightType = llvm::dyn_cast<ShapedType>(op.getWeight().getType());
+      if (!weightType) return;
+
+      auto shape = weightType.getShape(); // [OC, H, W, IC]
+      
+      // TOSA Conv2D의 Weight는 보통 [OC, H, W, IC] 순서.
+      if (shape.size() >= 3\) {
+        int64_t h = shape[1];
+        int64_t w = shape[2];
+
+        if (h > 3 || w > 3\) {
+          op.emitError() << "정적 검증 실패: 하드웨어 제약 조건 위반 (커널 " 
+                         << h << "x" << w << " 미지원)";
+          return signalPassFailure();
+        }
+      }
+    });
+  }
+};
+} // namespace
+
+namespace mlir {
+namespace tosa {
+void registerMyTosaAnalysisPass() {
+  PassRegistration<MyTosaAnalysisPass>();
+}
+} // namespace tosa
+} // namespace mlir
+0:{"buildId":"LVGkH5hFRtoNYTtLcmSxK","rsc":["$","$1","c",{"children":[["$","article",null,{"children":[["$","div",null,{"style":{"color":"#666","marginBottom":6},"children":["$","a",null,{"href":"/mlir","style":{"textDecoration":"none"},"children":["/","mlir"]}]}],["$","h2",null,{"style":{"marginTop":0},"children":"MLIR TOSA Static Analysis"}],["$","div",null,{"style":{"color":"#666","marginBottom":18},"children":"2026-01-07"}],["$","p",null,{"style":{"color":"#333"},"children":"MLIR TOSA Static Analysis 방법론"}],["$","hr",null,{"style":{"border":0,"borderTop":"1px solid #eee","margin":"18px 0"}}],["$","div",null,{"className":"prose","children":[["$","p",null,{"children":"1) TOSA (Tensor Operator Set Architecture)란?\nTOSA는 다양한 하드웨어 타겟(CPU, GPU, NPU)에서 추론을 수행하기 위해 설계된 표준 텐서 연산 집합임.\nArm에서 처음 제안했으며, 현재는 MLIR의 핵심 Dialect로 포함되어 있음."}],"\n",["$","ul",null,{"children":["\n",["$","li",null,{"children":"목적은 상위 프레임워크(TensorFlow, PyTorch)와 하위 코드 생성(LLVM IR, 하드웨어 특화 IR) 사이의 안정적인 교량(Stable Bridge) 역할"}],"\n",["$","li",null,{"children":["특징은 아래와 같음","\n",["$","ul",null,{"children":["\n",["$","li",null,{"children":"하드웨어 독립적: 특정 가속기에 치우치지 않는 범용적인 연산을 정의"}],"\n",["$","li",null,{"children":"양자화(Quantization) 최적화: 정수 연산 및 양자화 파라미터를 정교하게 다룸"}],"\n",["$","li",null,{"children":"낮은 복잡도: 약 100개 미만의 기본 연산으로 구성되어 백엔드 구현 부담을 줄임"}],"\n"]}],"\n"]}],"\n"]}],"\n",["$","p",null,{"children":"2) TOSA 정적 오류 분석 패스 작성법\nMLIR에서 \"정적 오류\"를 찾는 방법은 크게 두 가지"}],"\n",["$","ul",null,{"children":["\n",["$","li",null,{"children":"ODS 내장 Verifier: 각 Op의 타입, 랭크 등 구조적 정당성 체크"}],"\n",["$","li",null,{"children":"Custom Analysis Pass: 특정 하드웨어 제약 조건 위반이나 데이터 흐름상의 논리 오류 검출"}],"\n"]}],"\n",["$","p",null,{"children":"우리가 테스트 해볼것은\nTOSA 연산 중 특정 하드웨어가 지원하지 않는 설정(예: 커널 사이즈 제한)을 정적으로 찾아내는 패스"}],"\n",["$","p",null,{"children":"3) Pass 정의 (TableGen)\n먼저 패스의 메타데이터를 정의"}],"\n",["$","pre",null,{"children":["$","code",null,{"children":"// MyTosaAnalysis.td\ndef MyTosaAnalysis : Pass<\"my-tosa-analysis\", \"mlir::func::FuncOp\"> {\n  let summary = \"TOSA 연산의 하드웨어 호환성을 정적으로 검토.\";\n  let description = [{\n    이 패스는 TOSA Conv2D 연산의 커널 크기가 3x3보다 큰 경우 에러를 발생시킴.\n  }];\n  let constructor = \"mlir::tosa::createMyTosaAnalysisPass()\";\n}\n"}]}],"\n",["$","p",null,{"children":"4) 분석 로직 구현 (C++)\nwalk 함수를 사용해 IR을 순회하며 검사"}],"\n",["$","pre",null,{"children":["$","code",null,{"children":"$2"}]}],"\n","$L3","\n","$L4","\n","$L5","\n","$L6","\n","$L7","\n","$L8","\n","$L9","\n","$La","\n","$Lb","\n","$Lc","\n","$Ld","\n","$Le","\n","$Lf","\n","$L10"]}],"$L11","$L12"]}],["$L13"],"$L14"]}],"loading":null,"isPartial":false}
+3:["$","p",null,{"children":"5) 실제 테스트"}]
+4:["$","ol",null,{"children":["\n",["$","li",null,{"children":"4)에 언급된 소스를 llvm-project/mlir/lib/Dialect/Tosa/Transforms/ 에 MyTOsaAnalysis.cpp 같은 파일로 저장하자."}],"\n",["$","li",null,{"children":"mlir/lib/Dialect/Tosa/Transforms/CMakeLists.txt 를 열어서 add_mlir_dialect_library 부분에 MyTosaAnalysis.cpp를 추가하자"}],"\n"]}]
+5:["$","pre",null,{"children":["$","code",null,{"children":"add_mlir_dialect_library(MLIRTosaTransforms\n  TosaDecomposeConv2D.cpp\n  TosaInferShapes.cpp\n  MyTosaAnalysis.cpp  # <-- 추가\n  ...\n)\n"}]}]
+6:["$","ol",null,{"start":"3","children":["\n",["$","li",null,{"children":"mlir/tools/mlir-opt/mlir-opt.cpp 에"}],"\n"]}]
+7:["$","pre",null,{"children":["$","code",null,{"children":"namespace tosa {\n  void registerMyTosaAnalysisPass();\n}\n"}]}]
+8:["$","p",null,{"children":"를 namespace mlir 안에 넣자.\n그리고 main 함수에 아래 내용을 registerAllPasses(); 아래에 넣자."}]
+9:["$","pre",null,{"children":["$","code",null,{"children":"mlir::tosa::registerMyTosaAnalysisPass();\n"}]}]
+a:["$","ol",null,{"start":"4","children":["\n",["$","li",null,{"children":"이제 빌드를 다시 진행하자. 빌드 디렉토리로 가서 ninja mlir-opt 로 빌드할 수 있음."}],"\n",["$","li",null,{"children":"임의로 아래와 같은 테스트 파일을 만들자."}],"\n"]}]
+b:["$","pre",null,{"children":["$","code",null,{"children":"func.func @test_conv_too_large(%input: tensor<1x28x28x32xf32>, %weight: tensor<16x5x5x32xf32>, %bias: tensor<16xf32>) -> tensor<1x24x24x16xf32> {\n  // 5x5 커널이므로 에러가 발생해야 함\n  %0 = \"tosa.conv2d\"(%input, %weight, %bias) {\n    dilation = [1, 1],\n    pad = [0, 0, 0, 0],\n    stride = [1, 1]\n  } : (tensor<1x28x28x32xf32>, tensor<16x5x5x32xf32>, tensor<16xf32>) -> tensor<1x24x24x16xf32>\n  return %0 : tensor<1x24x24x16xf32>\n}\n"}]}]
+c:["$","ol",null,{"start":"6","children":["\n",["$","li",null,{"children":"아래와 같은 커맨드로 수행 가능"}],"\n"]}]
+d:["$","pre",null,{"children":["$","code",null,{"children":"./bin/mlir-opt --my-tosa-analysis test_tosa.mlir\n"}]}]
+e:["$","p",null,{"children":["$","img",null,{"src":"/c/Users/tinyf/Desktop/Capture/Capture-1.png","alt":"이미지 설명"}]}]
+f:["$","p",null,{"children":"====================================================================="}]
+10:["$","p",null,{"children":"물론 이건 테스트를 위한 쉬운 방법\n더 좋고 일반적인 방법에 대해서는 다른 포스트에서 논의해 보겠음."}]
+11:["$","hr",null,{"style":{"border":0,"borderTop":"1px solid #eee","margin":"36px 0"}}]
+12:["$","$L15",null,{}]
+13:["$","script","script-0",{"src":"/blog/_next/static/chunks/631eeae4923b8465.js","async":true}]
+14:["$","$L16",null,{"children":["$","$17",null,{"name":"Next.MetadataOutlet","children":"$@18"}]}]
+18:null
