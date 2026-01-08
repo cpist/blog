@@ -97,6 +97,53 @@ void registerMyTosaAnalysisPass() {
 } // namespace mlir
 ```
 
+* 여기서 walk 함수는 MLIR에서 IR 계층 구조를 자동으로 순회(Traversal) 하는 핵심.
+MLIR은 Module -> Function -> Block -> Operation -> Region 의 계층적(Nested) 구조.
+  - walk이 없다면, 특정 Op(예: tosa.conv2d)를 찾기 위해 4~5중 for문을 직접 작성해야 함
+  - 재귀적 순회를 자동화 함: 최상위 Op(예: 함수)에서 호출하면 그 안에 포함된 모든 하위 Op들을 DFS 방식으로 탐색
+  - 특정 타입을 필터링함: 템플릿 인자를 통해 내가 관심 있는 특정 Dialect의 Op만 골라서 콜백 함수를 실행할 수 있음
+  - 보일러플레이트 제거: 반복문 관리, 반복자(Iterator) 무효화 등의 복잡한 처리를 내부적으로 해결
+
+여기서 walk를 사용한건 함수 내부에 tosa.conv2d 가 어디에 있든 (루프 안이든, 조건문 안이든) 상관없이 모두 찾아내어 검증하기 위함.
+
+* llvm::dyn_cast 에 대해서
+내가 궁금했던 부분은 MLIR인데 왜 llvm 소스를 썼는가임.
+MLIR은 LLVM의 인프라 위에 구축된 프로젝트임.
+- 이말인 즉슨 LLVM이 제공하는 사용자 정의 RTTI(Run-Time Type Information) 메커니즘을 공유
+- MLIR 소스 코드를 보면 mlir/Support/LLVM.h를 자주 포함
+  - 즉, MLIR은 LLVM의 기초 유틸리티 모음인 LLVM Support Library에 깊게 의존
+- llvm::dyn_cast, llvm::cast, llvm::isa 등은 특정 클래스에 종속된 함수가 아니라, 템플릿 기반의 범용 유틸리티
+  - 이 템플릿들은 대상 객체가 특정한 규칙(인터페이스)만 지키고 있다면 어떤 타입이든 캐스팅할 수 있도록 설계
+
+가벼운 RTTI (Hand-rolled RTTI)
+- C++ 표준의 dynamic_cast는 실행 성능이 느리고 바이너리 사이즈를 키우는 경향이 있음
+- LLVM/MLIR은 표준 RTTI 대신 classof라는 정적 메서드를 사용하는 커스텀 RTTI를 직접 구현해서 씀
+- 설계 구조의 핵심 (classof): 모든 MLIR Operation(예: tosa::Conv2DOp)이나 Type은 내부에 classof라는 정적 함수를 가짐
+```
+// TableGen에 의해 자동 생성되는 코드의 개념적 모습
+struct Conv2DOp : public Op<Conv2DOp, ...> {
+  static bool classof(Operation *op) {
+    // 이 Operation의 이름이 "tosa.conv2d"인지 확인
+    return op->getName().getStringRef() == "tosa.conv2d";
+  }
+};
+```
+`llvm::dyn_cast<T>(obj)`를 호출하면, 템플릿 내부에서 T::classof(obj)를 호출
+  - "이 객체가 정말 T 타입으로 변환 가능한가?"를 체크
+  - 맞다면 포인터를 변환해주고, 틀리다면 nullptr을 반환
+
+포인터 래퍼(Pointer Wrapper) 설계
+  - tosa::Conv2DOp는 실제 거대한 객체가 아니라, Operation* 포인터 하나를 들고 있는 아주 가벼운 래퍼(Wrapper) 클래스
+  - 구조적으로 tosa::Conv2DOp 객체를 복사해도 실제로는 포인터 하나만 복사됩니다. (값 복사가 아닌 참조 복사처럼 동작)
+  - 유연성 측면에서 이러한 설계 덕분에 Operation*라는 범용 포인터를 하드웨어 제약 조건이 담긴 tosa::Conv2DOp라는 구체적인 클래스로 아주 가볍고 빠르게 재해석할 수 있음
+
+Dialect 간의 확장성 (Extensibility)
+  - MLIR은 수많은 Dialect(TOSA, Linalg, Affine 등)가 공존
+    - 이들이 모두 dyn_cast를 쓸 수 있는 이유
+  - 모든 연산은 결국 최상위 부모인 **mlir::Operation**으로 통하기 때문
+  - 각 Dialect는 TableGen을 통해 자신만의 **Unique ID(또는 이름)**를 가짐
+  - llvm::dyn_cast는 이 ID나 이름을 대조하여 캐스팅 여부를 판단
+
 5) 실제 테스트 
 1. 4)에 언급된 소스를 llvm-project/mlir/lib/Dialect/Tosa/Transforms/ 에 MyTOsaAnalysis.cpp 같은 파일로 저장하자.
 2. mlir/lib/Dialect/Tosa/Transforms/CMakeLists.txt 를 열어서 add_mlir_dialect_library 부분에 MyTosaAnalysis.cpp를 추가하자
