@@ -9,6 +9,14 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko">
+      <head>
+        <link
+          rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"
+          integrity="sha384-n8MVd4RsNIU0KOVEMVIqhKyMVPsoloXttrTHYUjDkaWaXIhKbMCh2GbqNl2CAPFu"
+          crossOrigin="anonymous"
+        />
+      </head>
       <body>
         <main>
           <header style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>

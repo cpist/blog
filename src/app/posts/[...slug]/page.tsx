@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { getAllPosts, getPostBySlug } from "@/lib/posts";
 import { compileMDX } from "next-mdx-remote/rsc";
 import Giscus from "@/components/Giscus";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 
 export async function generateStaticParams() {
   // p.slug = "mlir/hello-world" -> ["mlir", "hello-world"]
@@ -31,6 +33,10 @@ export default async function PostPage(props: { params: Promise<{ slug: string[]
     source,
     options: {
       parseFrontmatter: false,
+      mdxOptions: {
+        remarkPlugins: [remarkMath],
+        rehypePlugins: [rehypeKatex],
+      },
     },
   });
 
