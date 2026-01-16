@@ -2,7 +2,7 @@
 
 This repository contains the source code for my personal technology blog.
 
-The blog focuses on topics related to computer science, with a special emphasis on **compilers and language design**. I use this space to document my learning journey, share findings from reading papers, and explore technologies like LLVM, MLIR, and Triton.
+The blog focuses on topics related to computer science, with a special emphasis on **compilers, statistics and language design**. I use this space to document my learning journey, share findings from reading papers, and explore technologies like LLVM, MLIR, and Triton.
 
 ## Content Categories
 
