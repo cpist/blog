@@ -37,3 +37,56 @@ draft: false
 - XGBoost를 선택할 때
     - 성능(Accuracy)을 극한으로 끌어올려야 할 때
     - 데이터에 결측치(Missing Value)가 많아 모델이 이를 스스로 처리해주길 바랄 때
+
+4) 목적 함수
+XGBoost는 매 단계 $t$마다 아래의 목적 함수를 최소화하는 트리 $f_t$를 찾음.
+
+$$Obj^{(t)} = \sum_{i=1}^n l(y_i, \hat{y}_i^{(t-1)} + f_t(x_i)) + \Omega(f_t)$$
+
+- $l(y_i, \hat{y}_i)$: 손실 함수 (MSE, Log-loss 등)
+- $\Omega(f_t)$: 정규화 항 (Regularization). 모델의 복잡도를 제어하여 과적합을 방지
+    -  $\Omega(f) = \gamma T + \frac{1}{2}\lambda \|w\|^2$ ($T$는 리프 노드 개수, $w$는 리프 노드의 가중치)
+
+5) 테일러 전개 (Taylor Expansion) 를 이용한 근사
+- 일반적인 Gradient Boosting은 손실 함수의 1차 미분(Gradient)만 사용
+- XGBoost는 2차 미분(Hessian)까지 사용 (이게 Extreme 이라는 이름이 붙은 수학적 이유 중 하나)
+- 목적 함수의 손실 함수 부분을 테일러 2차 전개로 근사하면 다음과 같음
+    - $$Obj^{(t)} \approx \sum_{i=1}^n [l(y_i, \hat{y}_i^{(t-1)}) + g_i f_t(x_i) + \frac{1}{2}h_i f_t(x_i)^2] + \Omega(f_t)$$
+- 여기서 $g_i$와 $h_i$는 다음과 정의
+    - Gradient: 
+```
+  g_i = \frac{ \partial l(y_i, \hat{y}_i^{(t-1)}) }{ \partial \hat{y}_i^{(t-1)} }
+```
+    - Hessian: 
+```    
+    $$h_i = \frac{ \partial^2 l(y_i, \hat{y}_i^{(t-1)}) }{ \partial (\hat{y}_i^{(t-1)})^2 }$$
+```
+- 상수항인 $l(y_i, \hat{y}_i^{(t-1)})$를 제외하면, 우리가 최소화해야 할 목적 함수는 $g_i$와 $h_i$에 대한 2차식으로 정리 됨. 
+- 이는 Newton's Method를 함수 공간으로 확장한 것
+
+6) 최적의 리프 가중치 (Optimal Weights)
+- 트리의 구조가 결정되었을 때, 각 리프 노드 $j$에 할당할 최적의 가중치 $w_j^*$를 구하는 과정은 이차 함수의 최솟값을 찾는 문제
+- 목적 함수를 리프 노드 단위로 재정리하여 미분했을 때 0이 되는 지점을 찾으면 다음과 같은 수식이 나옴
+```
+$$w_j^* = -\frac{\sum_{i \in I_j} g_i}{\sum_{i \in I_j} h_i + \lambda}$$
+```
+- 이 수식은 통계적으로 **"해당 노드에 속한 샘플들의 오차(Gradient) 합을 곡률(Hessian)로 나눈 값"**을 의미
+- 여기에 $\lambda$라는 규제 항이 분모에 더해져 가중치가 너무 커지는 것을 막음.
+
+7) 분할 기준: Gain (분기점 찾기)
+트리를 구성할 때 어떤 특성으로 데이터를 나눌지 결정하는 기준인 Gain은 분할 전후의 목적 함수 감소량을 측정
+```
+$$Gain = \frac{1}{2} \left[ \frac{(\sum g_L)^2}{\sum h_L + \lambda} + \frac{(\sum g_R)^2}{\sum h_R + \lambda} - \frac{(\sum g_L + \sum g_R)^2}{\sum h_L + \sum h_R + \lambda} \right] - \gamma$$
+```
+- 첫 번째와 두 번째 항: 왼쪽/오른쪽 자식 노드의 점수
+- 세 번째 항: 분할 전 부모 노드의 점수
+- $\gamma$: 새로운 노드를 추가할 때 발생하는 비용 (일종의 Threshold)
+- Gain이 0보다 크면 분할을 수행
+    - 정보 이론의 Information Gain이나 통계의 Chi-square test와 유사한 맥락에서 데이터의 불확실성을 낮추는 지점을 찾는 과정
+
+====================================
+
+- 통계학적 관점에서의 강점
+    - 2차 최적화: 1차 미분만 쓰는 일반 GBM보다 손실 함수의 곡률(Curvature)을 고려하므로 더 빠르고 정확하게 수렴
+    - 구조적 규제: $\gamma$와 $\lambda$를 통해 모델의 복잡도를 직접 목적 함수에 포함시켜 통계적 유의성이 낮은 분할을 원천 차단
+    - Hessian의 역할: 데이터의 가중치를 조절하는 역할을 하며, 특히 불균형 데이터셋(Imbalanced Data)에서 가중치를 조절하는 통계적 근거를 제공
