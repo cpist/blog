@@ -9,7 +9,10 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@next/mdx": "^16.1.4",
+    "@types/mdx": "^2.0.13",
     "gray-matter": "^4.0.3",
+    "katex": "^0.16.27",
     "next": "16.0.10",
     "next-mdx-remote": "^5.0.0",
     "react": "19.2.1",

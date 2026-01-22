@@ -1,13 +1,22 @@
 import type { NextConfig } from "next";
+import createMDX from "@next/mdx";
 
-const repo = "blog"; // ← GitHub 레포 이름으로 바꾸기
+const repo = "blog";
 
 const nextConfig: NextConfig = {
-  output: "export",
-  trailingSlash: true, // GH Pages에서 폴더 라우팅 안정적
-  basePath: `/${repo}`,
-  assetPrefix: `/${repo}/`,
-  images: { unoptimized: true }, // next/image 최적화 서버가 없으므로
+    // 1. 설정 유지
+    pageExtensions: ["js", "jsx", "md", "mdx", "ts", "tsx"],
+    output: "export",
+    trailingSlash: true,
+    basePath: `/${repo}`,
+    assetPrefix: `/${repo}/`,
+    images: { unoptimized: true },
 };
 
-export default nextConfig;
+// 2. 옵션(plugins) 부분 삭제! 
+// (페이지 컴포넌트인 PostPage에서 직접 처리하므로 여기선 필요 없습니다)
+const withMDX = createMDX({
+    // options: { ... }  <-- 이 부분이 에러의 원인이었으므로 삭제합니다.
+});
+
+export default withMDX(nextConfig);
