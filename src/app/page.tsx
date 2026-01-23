@@ -10,6 +10,7 @@ export const metadata = {
 function prettyCategoryName(category: string) {
   // 폴더명 -> 표시명 (원하면 여기만 커스터마이즈)
   const map: Record<string, string> = {
+    "statistics": "STATISTICS",
     "mlir": "MLIR",
     "llvm": "LLVM",
     "paper": "PAPER",
