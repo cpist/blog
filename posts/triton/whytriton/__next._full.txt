@@ -8,9 +8,11 @@
 b:I[97367,["/blog/_next/static/chunks/ff1a16fafef87110.js","/blog/_next/static/chunks/247eb132b7f7b574.js"],"MetadataBoundary"]
 d:I[68027,[],"default"]
 :HL["/blog/_next/static/chunks/d335db6b3f1a2619.css","style"]
+:HC["/",""]
+:HL["/blog/_next/static/chunks/4057cc9dbcc744c0.css","style"]
 :HL["https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css","style",{"crossOrigin":"anonymous","integrity":"sha384-n8MVd4RsNIU0KOVEMVIqhKyMVPsoloXttrTHYUjDkaWaXIhKbMCh2GbqNl2CAPFu"}]
-0:{"P":null,"b":"uy8JxR5t6zqRcS2dJLPLy","c":["","posts","triton","whytriton",""],"q":"","i":false,"f":[[["",{"children":["posts",{"children":[["slug","triton/whytriton","c"],{"children":["__PAGE__",{}]}]}]},"$undefined","$undefined",true],[["$","$1","c",{"children":[[["$","link","0",{"rel":"stylesheet","href":"/blog/_next/static/chunks/d335db6b3f1a2619.css","precedence":"next","crossOrigin":"$undefined","nonce":"$undefined"}],["$","script","script-0",{"src":"/blog/_next/static/chunks/796e69ae18b2784c.js","async":true,"nonce":"$undefined"}]],["$","html",null,{"lang":"ko","children":[["$","head",null,{"children":["$","link",null,{"rel":"stylesheet","href":"https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css","integrity":"sha384-n8MVd4RsNIU0KOVEMVIqhKyMVPsoloXttrTHYUjDkaWaXIhKbMCh2GbqNl2CAPFu","crossOrigin":"anonymous"}]}],["$","body",null,{"children":["$","main",null,{"children":[["$","header",null,{"style":{"display":"flex","justifyContent":"space-between","alignItems":"baseline","gap":12},"children":[["$","h1",null,{"style":{"margin":"8px 0"},"children":["$","$L2",null,{"href":"/","style":{"textDecoration":"none"},"children":"CPIST's blog"}]}],["$","nav",null,{"style":{"display":"flex","gap":12},"children":["$","$L2",null,{"href":"/posts","children":"Posts"}]}]]}],["$","hr",null,{"style":{"border":0,"borderTop":"1px solid #eee","margin":"12px 0 24px"}}],["$","$L3",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L4",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":[[["$","title",null,{"children":"404: This page could not be found."}],["$","div",null,{"style":{"fontFamily":"system-ui,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif,\"Apple Color Emoji\",\"Segoe UI Emoji\"","height":"100vh","textAlign":"center","display":"flex","flexDirection":"column","alignItems":"center","justifyContent":"center"},"children":["$","div",null,{"children":[["$","style",null,{"dangerouslySetInnerHTML":{"__html":"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}"}}],["$","h1",null,{"className":"next-error-h1","style":{"display":"inline-block","margin":"0 20px 0 0","padding":"0 23px 0 0","fontSize":24,"fontWeight":500,"verticalAlign":"top","lineHeight":"49px"},"children":404}],["$","div",null,{"style":{"display":"inline-block"},"children":["$","h2",null,{"style":{"fontSize":14,"fontWeight":400,"lineHeight":"49px","margin":0},"children":"This page could not be found."}]}]]}]}]],[]],"forbidden":"$undefined","unauthorized":"$undefined"}],["$","footer",null,{"style":{"marginTop":48,"paddingTop":16,"borderTop":"1px solid #eee","color":"#666"},"children":["© ",2026," CPIST's blog"]}]]}]}]]}]]}],{"children":[["$","$1","c",{"children":[null,["$","$L3",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L4",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":"$undefined","forbidden":"$undefined","unauthorized":"$undefined"}]]}],{"children":[["$","$1","c",{"children":[null,["$","$L3",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L4",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":"$undefined","forbidden":"$undefined","unauthorized":"$undefined"}]]}],{"children":[["$","$1","c",{"children":["$L5",[["$","script","script-0",{"src":"/blog/_next/static/chunks/631eeae4923b8465.js","async":true,"nonce":"$undefined"}]],["$","$L6",null,{"children":["$","$7",null,{"name":"Next.MetadataOutlet","children":"$@8"}]}]]}],{},null,false,false]},null,false,false]},null,false,false]},null,false,false],["$","$1","h",{"children":[null,["$","$L9",null,{"children":"$@a"}],["$","div",null,{"hidden":true,"children":["$","$Lb",null,{"children":["$","$7",null,{"name":"Next.Metadata","children":"$@c"}]}]}],null]}],false]],"m":"$undefined","G":["$d",[]],"S":true}
-e:T7c4,%%writefile gemm_debug.cu
+0:{"P":null,"b":"kn_zbVXzLHkx1zDmfE4ny","c":["","posts","triton","whytriton",""],"q":"","i":false,"f":[[["",{"children":["posts",{"children":[["slug","triton/whytriton","c"],{"children":["__PAGE__",{}]}]}]},"$undefined","$undefined",true],[["$","$1","c",{"children":[[["$","link","0",{"rel":"stylesheet","href":"/blog/_next/static/chunks/d335db6b3f1a2619.css","precedence":"next","crossOrigin":"$undefined","nonce":"$undefined"}],["$","script","script-0",{"src":"/blog/_next/static/chunks/796e69ae18b2784c.js","async":true,"nonce":"$undefined"}]],["$","html",null,{"lang":"ko","children":[["$","head",null,{"children":["$","link",null,{"rel":"stylesheet","href":"https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css","integrity":"sha384-n8MVd4RsNIU0KOVEMVIqhKyMVPsoloXttrTHYUjDkaWaXIhKbMCh2GbqNl2CAPFu","crossOrigin":"anonymous"}]}],["$","body",null,{"children":["$","main",null,{"children":[["$","header",null,{"style":{"display":"flex","justifyContent":"space-between","alignItems":"baseline","gap":12},"children":[["$","h1",null,{"style":{"margin":"8px 0"},"children":["$","$L2",null,{"href":"/","style":{"textDecoration":"none"},"children":"CPIST's blog"}]}],["$","nav",null,{"style":{"display":"flex","gap":12},"children":["$","$L2",null,{"href":"/posts","children":"Posts"}]}]]}],["$","hr",null,{"style":{"border":0,"borderTop":"1px solid #eee","margin":"12px 0 24px"}}],["$","$L3",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L4",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":[[["$","title",null,{"children":"404: This page could not be found."}],["$","div",null,{"style":{"fontFamily":"system-ui,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif,\"Apple Color Emoji\",\"Segoe UI Emoji\"","height":"100vh","textAlign":"center","display":"flex","flexDirection":"column","alignItems":"center","justifyContent":"center"},"children":["$","div",null,{"children":[["$","style",null,{"dangerouslySetInnerHTML":{"__html":"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}"}}],["$","h1",null,{"className":"next-error-h1","style":{"display":"inline-block","margin":"0 20px 0 0","padding":"0 23px 0 0","fontSize":24,"fontWeight":500,"verticalAlign":"top","lineHeight":"49px"},"children":404}],["$","div",null,{"style":{"display":"inline-block"},"children":["$","h2",null,{"style":{"fontSize":14,"fontWeight":400,"lineHeight":"49px","margin":0},"children":"This page could not be found."}]}]]}]}]],[]],"forbidden":"$undefined","unauthorized":"$undefined"}],["$","footer",null,{"style":{"marginTop":48,"paddingTop":16,"borderTop":"1px solid #eee","color":"#666"},"children":["© ",2026," CPIST's blog"]}]]}]}]]}]]}],{"children":[["$","$1","c",{"children":[null,["$","$L3",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L4",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":"$undefined","forbidden":"$undefined","unauthorized":"$undefined"}]]}],{"children":[["$","$1","c",{"children":[null,["$","$L3",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L4",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":"$undefined","forbidden":"$undefined","unauthorized":"$undefined"}]]}],{"children":[["$","$1","c",{"children":["$L5",[["$","link","0",{"rel":"stylesheet","href":"/blog/_next/static/chunks/4057cc9dbcc744c0.css","precedence":"next","crossOrigin":"$undefined","nonce":"$undefined"}],["$","script","script-0",{"src":"/blog/_next/static/chunks/631eeae4923b8465.js","async":true,"nonce":"$undefined"}]],["$","$L6",null,{"children":["$","$7",null,{"name":"Next.MetadataOutlet","children":"$@8"}]}]]}],{},null,false,false]},null,false,false]},null,false,false]},null,false,false],["$","$1","h",{"children":[null,["$","$L9",null,{"children":"$@a"}],["$","div",null,{"hidden":true,"children":["$","$Lb",null,{"children":["$","$7",null,{"name":"Next.Metadata","children":"$@c"}]}]}],null]}],false]],"m":"$undefined","G":["$d",[]],"S":true}
+e:T7c2,%%writefile gemm_debug.cu
 #include <cuda_runtime.h>
 #include <iostream>
 
@@ -26,7 +28,7 @@ __global__ void matrixMulTiled(float* A, float* B, float* C, int width) {
     int col = blockIdx.x * TILE_SIZE + tx;
 
     float val = 0;
-    // width가 TILE_SIZE의 배수라고 가정 (512/16 = 32\)
+    // width가 TILE_SIZE의 배수라고 가정 (512/16 = 32)
     for (int m = 0; m < (width / TILE_SIZE); ++m) {
         sA[ty][tx] = A[row * width + (m * TILE_SIZE + tx)];
         sB[ty][tx] = B[(m * TILE_SIZE + ty) * width + col];
@@ -71,13 +73,16 @@ int main() {
     cudaDeviceSynchronize();
 
     cudaMemcpy(h_C, d_C, size, cudaMemcpyDeviceToHost);
-    std::cout << "Result C[0]: " << h_C[0] << " (Expected: 1024.0\)" << std::endl;
+    std::cout << "Result C[0]: " << h_C[0] << " (Expected: 1024.0)" << std::endl;
 
     cudaFree(d_A); cudaFree(d_B); cudaFree(d_C);
     free(h_A); free(h_B); free(h_C);
     return 0;
 }
-f:T8d6,import torch
+5:["$","article",null,{"style":{"maxWidth":"800px","margin":"0 auto","padding":"20px"},"children":[["$","div",null,{"style":{"color":"#666","marginBottom":6},"children":["$","a",null,{"href":"/triton","style":{"textDecoration":"none"},"children":["/","triton"]}]}],["$","h2",null,{"style":{"marginTop":0},"children":"왜 Triton 이지?"}],["$","div",null,{"style":{"color":"#666","marginBottom":18},"children":"2026-01-05"}],["$","p",null,{"style":{"color":"#333","fontStyle":"italic"},"children":"Simple compare with code"}],["$","hr",null,{"style":{"border":0,"borderTop":"1px solid #eee","margin":"18px 0"}}],["$","div",null,{"className":"prose","style":{"lineHeight":1.6},"children":[["$","ol",null,{"children":["\n",["$","li",null,{"children":["\n",["$","p",null,{"children":"사소한 팁인데 (본인도 colab 잘 안써봤어서..)\n%%writefile (파일명) 같은 방식으로 해당 셀의 내용을 Colab 인스턴스 (remote server) 내에 파일로 저장할 수 있음."}],"\n"]}],"\n",["$","li",null,{"children":["\n",["$","p",null,{"children":"그리고 .ipynb 로 저장하면 VSCode에서 extension 깔면 자연스럽게 colab kernel에 연결해서 쓸수 있다는 것."}],"\n"]}],"\n",["$","li",null,{"children":["\n",["$","p",null,{"children":"일단 CUDA 코드를 보자"}],"\n"]}],"\n"]}],"\n",["$","pre",null,{"children":["$","code",null,{"children":"$e"}]}],"\n",["$","p",null,{"children":"Colab에서 수행은 아래와 같이 진행"}],"\n",["$","pre",null,{"children":["$","code",null,{"children":"// 여기서 sm_75를 준 이유는, Colab 환경의 드라이버 버전과 nvcc 컴파일러 버전 간의 미스매치 때문에 발생한 에러를 해결하기 위한 것\n// unsupported toolchain이라는 메시지는 현재 GPU 드라이버가 인식할 수 없는 최신(혹은 너무 구형) PTX 코드를 nvcc가 생성했어서 발생함\n// 이 때문에 Colab의 T4 GPU(CUDA 12.4 드라이버) 환경에 맞춰서 아키텍처 옵션을 명시해주어야함.\n// 이게 바로 sm_75 (Turing 아키텍쳐)\n// 아키텍쳐 옵션 추가로 T4 GPU에 맞는 PTX를 생성하도록 강제\n\n!nvcc -arch=sm_75 gemm_debug.cu -o gemm_debug\n!./gemm_debug\n"}]}],"\n",["$","p",null,{"children":"시간은 2초 정도 걸림.\n(!nvidia-smi 로 사용한 GPU 정보 체크 가능하다는 것)"}],"\n","$Lf","\n","$L10","\n","$L11","\n","$L12","\n","$L13","\n","$L14","\n","$L15","\n","$L16","\n","$L17"]}],"$L18","$L19"]}]
+1b:I[80852,["/blog/_next/static/chunks/796e69ae18b2784c.js","/blog/_next/static/chunks/631eeae4923b8465.js"],"default"]
+f:["$","ol",null,{"start":"4","children":["\n",["$","li",null,{"children":"그 다음 triton 코드를 보자"}],"\n"]}]
+1a:T8cb,import torch
 import triton
 import triton.language as tl
 import os
@@ -95,7 +100,7 @@ def matmul_kernel(
     BLOCK_SIZE_M: tl.constexpr, BLOCK_SIZE_N: tl.constexpr, BLOCK_SIZE_K: tl.constexpr,
 ):
     # 1. 2D 타일 인덱스 계산 (CUDA의 blockIdx와 유사)
-    pid = tl.program_id(0\)
+    pid = tl.program_id(0)
     num_pid_n = tl.cdiv(N, BLOCK_SIZE_N)
     pid_m = pid // num_pid_n
     pid_n = pid % num_pid_n
@@ -110,7 +115,7 @@ def matmul_kernel(
     b_ptrs = b_ptr + (offs_k[:, None] * stride_bk + offs_bn[None, :] * stride_bn)
 
     # 4. 루프를 돌며 타일 연산 (CUDA의 Phase 루프와 동일)
-    accumulator = tl.zeros((BLOCK_SIZE_M, BLOCK_SIZE_N), dtype=tl.float32\)
+    accumulator = tl.zeros((BLOCK_SIZE_M, BLOCK_SIZE_N), dtype=tl.float32)
     for k in range(0, tl.cdiv(K, BLOCK_SIZE_K)):
         a = tl.load(a_ptrs)
         b = tl.load(b_ptrs)
@@ -131,28 +136,27 @@ def triton_gemm(a, b):
     grid = lambda META: (triton.cdiv(M, META['BLOCK_SIZE_M']) * triton.cdiv(N, META['BLOCK_SIZE_N']),)
     matmul_kernel[grid](
         a, b, c, M, N, K,
-        a.stride(0\), a.stride(1\), b.stride(0\), b.stride(1\), c.stride(0\), c.stride(1\),
+        a.stride(0), a.stride(1), b.stride(0), b.stride(1), c.stride(0), c.stride(1),
         BLOCK_SIZE_M=32, BLOCK_SIZE_N=32, BLOCK_SIZE_K=32
     )
     return c
 
 # 테스트
-a = torch.ones((512, 512\), device='cuda')
-b = torch.ones((512, 512\), device='cuda') * 2
+a = torch.ones((512, 512), device='cuda')
+b = torch.ones((512, 512), device='cuda') * 2
 res = triton_gemm(a, b)
-print(f"Triton Result[0,0]: {res[0,0]} (Expected: 1024\)")
-5:["$","article",null,{"children":[["$","div",null,{"style":{"color":"#666","marginBottom":6},"children":["$","a",null,{"href":"/triton","style":{"textDecoration":"none"},"children":["/","triton"]}]}],["$","h2",null,{"style":{"marginTop":0},"children":"왜 Triton 이지?"}],["$","div",null,{"style":{"color":"#666","marginBottom":18},"children":"2026-01-05"}],["$","p",null,{"style":{"color":"#333"},"children":"Simple compare with code"}],["$","hr",null,{"style":{"border":0,"borderTop":"1px solid #eee","margin":"18px 0"}}],["$","div",null,{"className":"prose","children":[["$","p",null,{"children":"1) 사소한 팁인데 (본인도 colab 잘 안써봤어서..)\n%%writefile (파일명) 같은 방식으로 해당 셀의 내용을 Colab 인스턴스 (remote server) 내에 파일로 저장할 수 있음."}],"\n",["$","p",null,{"children":"2) 그리고 .ipynb 로 저장하면 VSCode에서 extension 깔면 자연스럽게 colab kernel에 연결해서 쓸수 있다는 것."}],"\n",["$","p",null,{"children":"3) 일단 CUDA 코드를 보자"}],"\n",["$","pre",null,{"children":["$","code",null,{"children":"$e"}]}],"\n",["$","p",null,{"children":"Colab에서 수행은 아래와 같이 진행"}],"\n",["$","pre",null,{"children":["$","code",null,{"children":"// 여기서 sm_75를 준 이유는, Colab 환경의 드라이버 버전과 nvcc 컴파일러 버전 간의 미스매치 때문에 발생한 에러를 해결하기 위한 것\n// unsupported toolchain이라는 메시지는 현재 GPU 드라이버가 인식할 수 없는 최신(혹은 너무 구형) PTX 코드를 nvcc가 생성했어서 발생함\n// 이 때문에 Colab의 T4 GPU(CUDA 12.4 드라이버) 환경에 맞춰서 아키텍처 옵션을 명시해주어야함.\n// 이게 바로 sm_75 (Turing 아키텍쳐)\n// 아키텍쳐 옵션 추가로 T4 GPU에 맞는 PTX를 생성하도록 강제\n\n!nvcc -arch=sm_75 gemm_debug.cu -o gemm_debug\n!./gemm_debug\n"}]}],"\n",["$","p",null,{"children":"시간은 2초 정도 걸림.\n(!nvidia-smi 로 사용한 GPU 정보 체크 가능하다는 것)"}],"\n",["$","p",null,{"children":"4) 그 다음 triton 코드를 보자"}],"\n",["$","pre",null,{"children":["$","code",null,{"children":"$f"}]}],"\n","$L10","\n","$L11","\n","$L12","\n","$L13","\n","$L14","\n","$L15","\n","$L16"]}],"$L17","$L18"]}]
-19:I[80852,["/blog/_next/static/chunks/796e69ae18b2784c.js","/blog/_next/static/chunks/631eeae4923b8465.js"],"default"]
-10:["$","p",null,{"children":"Pytorch 코드로 그냥 실행하면 됨."}]
-11:["$","p",null,{"children":"5) 가벼운 비교로 가보자.\n위에서 CUDA 에 한계로 볼수 있는 지점이 Toolchain 관리인데"}]
-12:["$","ul",null,{"children":["\n",["$","li",null,{"children":"CUDA 코드는 특정 GPU 아키텍처에 맞게 컴파일된 바이너리(Cubin)나 중간 표현(PTX)을 생성해서"}],"\n",["$","li",null,{"children":"드라이버가 조금만 구형이거나 컴파일러가 너무 앞서가면 실행조차 되지 않음."}],"\n"]}]
-13:["$","p",null,{"children":"반면 MLIR/TRITON의 경우"}]
-14:["$","ul",null,{"children":["\n",["$","li",null,{"children":"실행 시점에 현재 GPU의 정보를 읽어와서 그에 맞는 MLIR Dialect를 생성하고 최적화하고"}],"\n",["$","li",null,{"children":"사용자가 아키텍쳐 옵션같은거 몰라도 Triton 컴파일러 하위의 Back-end Pass가 이를 알아서 처리함."}],"\n"]}]
-15:["$","p",null,{"children":"그리고 한눈에 봐도 Triton이나 MLIR은 위 코드에서 main() 함수가 담당하는 데이터 이동 및 메모리 관리 로직을 추상화하여 자동으로 생성해 줌."}]
-16:["$","ul",null,{"children":["\n",["$","li",null,{"children":"Simple 한 GEMM (GEneral Matrix Matrix Multiplication) 연산 하나를 돌리기 위해 계산 외적인 인프라 코드를 짜는 데 별 신경을 다 쓰는데"}],"\n",["$","li",null,{"children":"MLIR은 정말 손쉽게 자동화 해서 하드웨어 최적화된 저수준 호출은 컴파일러가 해주는 셈."}],"\n"]}]
-17:["$","hr",null,{"style":{"border":0,"borderTop":"1px solid #eee","margin":"36px 0"}}]
-18:["$","$L19",null,{}]
+print(f"Triton Result[0,0]: {res[0,0]} (Expected: 1024)")
+10:["$","pre",null,{"children":["$","code",null,{"children":"$1a"}]}]
+11:["$","p",null,{"children":"Pytorch 코드로 그냥 실행하면 됨."}]
+12:["$","ol",null,{"start":"5","children":["\n",["$","li",null,{"children":"가벼운 비교로 가보자.\n위에서 CUDA 에 한계로 볼수 있는 지점이 Toolchain 관리인데"}],"\n"]}]
+13:["$","ul",null,{"children":["\n",["$","li",null,{"children":"CUDA 코드는 특정 GPU 아키텍처에 맞게 컴파일된 바이너리(Cubin)나 중간 표현(PTX)을 생성해서"}],"\n",["$","li",null,{"children":"드라이버가 조금만 구형이거나 컴파일러가 너무 앞서가면 실행조차 되지 않음."}],"\n"]}]
+14:["$","p",null,{"children":"반면 MLIR/TRITON의 경우"}]
+15:["$","ul",null,{"children":["\n",["$","li",null,{"children":"실행 시점에 현재 GPU의 정보를 읽어와서 그에 맞는 MLIR Dialect를 생성하고 최적화하고"}],"\n",["$","li",null,{"children":"사용자가 아키텍쳐 옵션같은거 몰라도 Triton 컴파일러 하위의 Back-end Pass가 이를 알아서 처리함."}],"\n"]}]
+16:["$","p",null,{"children":"그리고 한눈에 봐도 Triton이나 MLIR은 위 코드에서 main() 함수가 담당하는 데이터 이동 및 메모리 관리 로직을 추상화하여 자동으로 생성해 줌."}]
+17:["$","ul",null,{"children":["\n",["$","li",null,{"children":"Simple 한 GEMM (GEneral Matrix Matrix Multiplication) 연산 하나를 돌리기 위해 계산 외적인 인프라 코드를 짜는 데 별 신경을 다 쓰는데"}],"\n",["$","li",null,{"children":"MLIR은 정말 손쉽게 자동화 해서 하드웨어 최적화된 저수준 호출은 컴파일러가 해주는 셈."}],"\n"]}]
+18:["$","hr",null,{"style":{"border":0,"borderTop":"1px solid #eee","margin":"36px 0"}}]
+19:["$","$L1b",null,{}]
 a:[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}]]
-1a:I[27201,["/blog/_next/static/chunks/ff1a16fafef87110.js","/blog/_next/static/chunks/247eb132b7f7b574.js"],"IconMark"]
-c:[["$","title","0",{"children":"왜 Triton 이지? - CPIST's blog"}],["$","meta","1",{"name":"description","content":"Simple compare with code"}],["$","link","2",{"rel":"icon","href":"/blog/favicon.ico?favicon.0b3bf435.ico","sizes":"256x256","type":"image/x-icon"}],["$","$L1a","3",{}]]
+1c:I[27201,["/blog/_next/static/chunks/ff1a16fafef87110.js","/blog/_next/static/chunks/247eb132b7f7b574.js"],"IconMark"]
+c:[["$","title","0",{"children":"왜 Triton 이지? - CPIST's blog"}],["$","meta","1",{"name":"description","content":"Simple compare with code"}],["$","link","2",{"rel":"icon","href":"/blog/favicon.ico?favicon.0b3bf435.ico","sizes":"256x256","type":"image/x-icon"}],["$","$L1c","3",{}]]
 8:null
