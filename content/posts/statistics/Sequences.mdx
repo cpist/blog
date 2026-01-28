@@ -1,0 +1,32 @@
+---
+title: "Sequences & Series"
+date: "2026-01-28"
+summary: "Sequences & Series"
+tags: ["etc", "Calculus"]
+draft: false
+---
+1) 수렴 판정
+- n번째 항 판정법 (n-th Term Test) : 가장 먼저 진행
+    - $`\lim_{n \to \infty} a_n \neq 0`$이면 급수는 무조건 발산함.
+- 비율 판정법 (Ratio Test) : 팩토리얼($n!$)이나 지수($3^n$)가 보이면 무조건 진행
+    - $$`\lim_{n \to \infty} \left| \frac{a_{n+1}}{a_n} \right| = L`$$
+    - ($L < 1$ 수렴, $L > 1$ 발산, $L = 1$ 판정 불가)
+- 적분 판정법 (Integral Test): $n \ln n$ 같은 형태가 분모에 있을 때 유용
+    - $`\int_{1}^{\infty} f(x) dx`$의 수렴성과 급수의 수렴성은 운명을 같이 함.
+- 교대급수 판정법 (Alternating Series Test): 부호가 $(-1)^n$으로 왔다 갔다 할 때
+    - 절대값이 0으로 감소하면 수렴
+
+2) 매클로린 급수 (Maclaurin Series)
+- 이건 유도하는게 아니라, 그냥 암기해야 함
+- 통계학(적률생성함수 등)에서도 계속 쓰이는 4대장
+    - Geometric Series: $`\frac{1}{1-x} = \sum_{n=0}^{\infty} x^n = 1 + x + x^2 + \dots`$ ($|x| < 1$)
+    - Exponential: $`e^x = \sum_{n=0}^{\infty} \frac{x^n}{n!} = 1 + x + \frac{x^2}{2!} + \dots`$ (모든 $x$에 대해 수렴)
+    - Sine (홀수차항): $`\sin x = x - \frac{x^3}{3!} + \frac{x^5}{5!} - \dots`$
+    - Cosine (짝수차항): $`\cos x = 1 - \frac{x^2}{2!} + \frac{x^4}{4!} - \dots`$
+-  $\sum \frac{n}{2^n}$ 같은 꼴이 나오면, $\frac{1}{1-x}$를 미분해서 $x$를 곱한 형태($x/(1-x)^2$)에 $x=1/2$을 대입하는 테크닉을 사용
+
+3) 멱급수의 수렴 반경 (Radius of Convergence)
+- 멱급수 $\sum c_n (x-a)^n$이 주어졌을 때 수렴 구간을 찾는 문제
+    - 보통 Ratio Test를 사용하여 $|x-a| < R$ 형태를 만듦
+    - 함정 주의: 구간의 양 끝점(Endpoints)은 따로 대입해서 수렴 여부를 확인
+    - 문제 보기가 "열린 구간"인지 "닫힌 구간"인지 꼭 확인
