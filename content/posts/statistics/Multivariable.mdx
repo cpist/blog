@@ -1,0 +1,36 @@
+---
+title: "Calculus-3"
+date: "2026-01-29"
+summary: "Multivariable Calculus"
+tags: ["etc", "Calculus"]
+draft: false
+---
+통계학(다변량 분포, 확률변수 변환)과도 직결되는 내용
+
+1) 편미분과 기울기 벡터 (Partial Derivatives & Gradient)
+- Gradient ($\nabla f$): 함수값이 가장 빠르게 증가하는 방향을 가리킴.
+    - 접평면(Tangent Plane): 곡면 $f(x, y, z) = c$ 위의 점 $(x_0, y_0, z_0)$에서의 접평면 방정식은 $\nabla f(x_0, y_0, z_0) \cdot (x-x_0, y-y_0, z-z_0) = 0$
+    - 법선 벡터(Normal vector)가 바로 $\nabla f$라는 점을 이용
+- 연쇄 법칙 (Chain Rule): 다변수에서는 Tree diagram을 그려서 경로를 따라가기
+    - $z = f(x, y)$, $x = g(t)$, $y = h(t)$일 때 $`\frac{dz}{dt} = \frac{\partial z}{\partial x}\frac{dx}{dt} + \frac{\partial z}{\partial y}\frac{dy}{dt}`$
+
+2) 다중 적분: 순서 변경 (Fubini's Theorem & Changing Order)
+- 예시: $\int_{0}^{1} \int_{y}^{1} e^{x^2} dx dy$
+    - $e^{x^2}$은 $x$로 바로 적분할 수 없음
+    - 영역을 보면 $0 \le y \le 1$, $y \le x \le 1$임. (삼각형 영역)
+    - 순서를 바꾸면 $x$는 0에서 1까지, $y$는 0에서 $x$까지가 됨
+    - $\int_{0}^{1} \int_{0}^{x} e^{x^2} dy dx = \int_{0}^{1} x e^{x^2} dx$. 이제 치환 적분으로 쉽게 풀림.
+
+3) 변수 변환과 야코비안 (Change of Variables & Jacobian)
+- 기본 공식: $`\iint_R f(x, y) dA = \iint_S f(x(u, v), y(u, v)) \left| \frac{\partial(x, y)}{\partial(u, v)} \right| du dv`$
+    - 저 절대값 안의 행렬식이 바로 **Jacobian ($J$)** : 면적의 왜곡률을 보정
+- 극좌표 (Polar Coordinates): 엄청 나오는 개념
+    - $x = r \cos \theta$, $y = r \sin \theta$
+    - $dx dy = r \, dr d\theta$
+
+4) 그린 정리 (Green's Theorem)
+- 선적분(Line Integral)을 이중적분으로 바꿔서 계산
+    - 공식: $`\oint_C P dx + Q dy = \iint_D (\frac{\partial Q}{\partial x} - \frac{\partial P}{\partial y}) dA`$
+    - 경로 $C$가 닫힌 곡선(Closed curve)이고 반시계 방향일 때 사용
+        - 복잡한 선적분 문제가 나오면 사용
+
