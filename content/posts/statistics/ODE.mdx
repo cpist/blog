@@ -1,0 +1,32 @@
+---
+title: "Calculus-4"
+date: "2026-02-01"
+summary: "Differential Equations"
+tags: ["etc", "Calculus"]
+draft: false
+---
+ODE에 대한 **"유형별 해법"** 을 외워야 한다.
+
+1) 1계 미분방정식 (First-Order ODEs)
+- 딱 두 가지 유형만 확실히 잡자.
+- 변수 분리형 (Separable): $\frac{dy}{dx} = g(x)h(y)$
+    - $y$는 왼쪽, $x$는 오른쪽으로 몰아서 각각 적분. $\int \frac{1}{h(y)} dy = \int g(x) dx$
+- 1계 선형 미분방정식 (Linear Equations): $y' + P(x)y = Q(x)$
+    - 적분 인자(Integrating Factor) $`\mu(x) = e^{\int P(x) dx}`$를 떠올려야 함.
+    - 양변에 $\mu(x)$를 곱하면 좌변이 $(y \cdot \mu(x))'$ 형태로 묶임
+    - 적분 인자는 $e$의 $P(x)$ 적분승이다
+
+2) 2계 선형 상미분방정식 (Second-Order Linear ODEs)
+- $ay'' + by' + cy = 0$ (계수가 상수인 제차 방정식)
+- 특성 방정식(Characteristic Equation) $ar^2 + br + c = 0$의 근($r$)이 무엇이냐에 따라 해의 형태가 결정
+    - 서로 다른 두 실근 ($r_1, r_2$): $`y = c_1 e^{r_1 x} + c_2 e^{r_2 x}`$
+    - 중근 ($r$): $y = c_1 e^{rx} + c_2 x e^{rx}$ (함정 주의 두번째 항에 x가 붙는 것이 포인트)
+    - 허근 ($\alpha \pm \beta i$): $`y = e^{\alpha x} (c_1 \cos \beta x + c_2 \sin \beta x)`$
+
+3) 미적분의 기하학적 응용 (Geometry of Calculus)
+- 계산보다는 공식의 형태를 묻는 문제가 많음
+    - 곡선의 길이 (Arc Length): $`L = \int_{a}^{b} \sqrt{1 + (f'(x))^2} dx`$
+    - 회전체의 겉넓이: $x$축 회전 시 $`S = \int_{a}^{b} 2\pi y \sqrt{1 + (y')^2} dx`$
+    - 보통 이 공식 자체를 묻는 경우가 많음
+
+
