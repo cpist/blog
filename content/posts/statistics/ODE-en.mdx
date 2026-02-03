@@ -1,0 +1,30 @@
+---
+title: "Calculus-4 (EN)"
+date: "2026-02-03"
+summary: "Differential Equations (English)"
+tags: ["etc", "Calculus"]
+draft: false
+---
+You should memorize the **solution types** for ODEs.
+
+1) First-Order ODEs
+- Focus on just two types.
+- Separable: $\frac{dy}{dx} = g(x)h(y)$
+    - Move $y$ to the left and $x$ to the right, then integrate: $\int \frac{1}{h(y)} \, dy = \int g(x) \, dx$
+- First-order linear (Linear Equations): $y' + P(x)y = Q(x)$
+    - Remember the integrating factor $\mu(x) = e^{\int P(x) \, dx}$.
+    - Multiply both sides by $\mu(x)$ so the left side becomes $(y \cdot \mu(x))'$.
+    - The integrating factor is $e$ raised to the integral of $P(x)$.
+
+2) Second-Order Linear ODEs
+- $ay'' + by' + cy = 0$ (homogeneous with constant coefficients)
+- The solution form depends on the roots $r$ of the characteristic equation $ar^2 + br + c = 0$.
+    - Two distinct real roots ($r_1, r_2$): $y = c_1 e^{r_1 x} + c_2 e^{r_2 x}$
+    - Repeated root ($r$): $y = c_1 e^{r x} + c_2 x e^{r x}$ (note the extra $x$ term)
+    - Complex roots ($\alpha \pm \beta i$): $y = e^{\alpha x} (c_1 \cos \beta x + c_2 \sin \beta x)$
+
+3) Geometric Applications of Calculus
+- Many problems ask for the formula shape rather than computation.
+    - Arc length: $L = \int_{a}^{b} \sqrt{1 + (f'(x))^2} \, dx$
+    - Surface area of revolution about the $x$-axis: $S = \int_{a}^{b} 2\pi y \sqrt{1 + (y')^2} \, dx$
+    - Often the formulas themselves are asked directly.
