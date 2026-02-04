@@ -1,0 +1,42 @@
+---
+title: "Linear Algebra for Compilers - SVD / QR Decomposition (EN)"
+date: "2026-02-04"
+summary: "SVD and QR Decomposition"
+tags: ["etc", "Linear Algebra", "statistics"]
+draft: false
+---
+SVD and QR decomposition are used in AI compilers for weight compression and compute optimization analysis.
+
+1) QR Decomposition
+QR decomposition represents a matrix $A$ as a product of an **orthogonal matrix $Q$** and an **upper triangular matrix $R$**.
+
+The formula is $$A = QR$$
+- $Q$ (Orthogonal Matrix): column vectors are mutually orthogonal and have unit length. ($Q^TQ = I$)
+    - Orthogonal means the inner product of two vectors is 0.
+- $R$ (Upper Triangular Matrix): all entries below the diagonal are 0.
+- Use cases: solving linear systems, least squares, eigenvalue computation (QR algorithm).
+
+* Meaning
+- It formalizes the Gram-Schmidt process.
+- Since orthogonalization reduces numerical instability, it is often used to solve $Ax = b$ in systems requiring high precision.
+
+2) SVD (Singular Value Decomposition)
+SVD decomposes any $m \times n$ matrix $A$ into a product of three matrices, and is one of the most powerful tools in linear algebra.
+
+The formula is $$A = U\Sigma V^T$$
+- $U$ (Left Singular Matrix): an $m \times m$ orthogonal matrix of eigenvectors of $AA^T$.
+- $\Sigma$ (Singular Value Matrix): an $m \times n$ diagonal (rectangular) matrix with singular values $\sigma_i = \sqrt{\lambda_i}$ on the diagonal, sorted in descending order.
+- $V$ (Right Singular Matrix): an $n \times n$ orthogonal matrix of eigenvectors of $A^TA$.
+
+* Meaning
+- SVD decomposes a matrix into the process of "rotation ($V^T$) -> scaling ($\Sigma$) -> rotation ($U$)".
+- Removing small singular values enables strong performance for data compression (PCA) and denoising.
+
+3) Points to Think About
+- Why compute $A^TA$ in SVD?
+    - The key is understanding how matrix $A$ transforms space.
+    - $A^TA$ is symmetric, so it always has orthogonal eigenvectors ($V$).
+    - These eigenvectors define the principal axes before the transformation by $A$, and the eigenvalues indicate how much each axis is stretched ($\sigma^2$).
+- Why is QR decomposition preferred over SVD for solving linear systems?
+    - SVD typically requires iterative numerical methods to find eigenvalues, which is expensive.
+    - QR decomposition can be computed in finite steps via Gram-Schmidt or Householder transformations, so it is much faster.
