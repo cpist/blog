@@ -11,8 +11,8 @@ export async function generateStaticParams() {
   return getAllPosts().map((p) => ({ slug: p.slug.split("/") }));
 }
 
-export async function generateMetadata(props: { params: { slug: string[] } }) {
-  const { slug } = props.params;
+export async function generateMetadata(props: { params: Promise<{ slug: string[] }> }) {
+  const { slug } = await props.params;
   const joined = slug.join("/");
   const post = getPostBySlug(joined);
   if (!post) return {};
@@ -22,8 +22,8 @@ export async function generateMetadata(props: { params: { slug: string[] } }) {
   };
 }
 
-export default async function PostPage(props: { params: { slug: string[] } }) {
-  const { slug } = props.params;
+export default async function PostPage(props: { params: Promise<{ slug: string[] }> }) {
+  const { slug } = await props.params;
   const joined = slug.join("/");
 
   const post = getPostBySlug(joined);

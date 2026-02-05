@@ -8,6 +8,7 @@ draft: false
 데이터 엔지니어링은 결국 "데이터를 믿을 수 있게 만드는 일"임.
 
 1) 핵심 아키텍처 트렌드: Lakehouse & Decoupled
+
 과거에는 데이터 웨어하우스와 데이터 레이크를 따로 구축했지만, 지금은 이 둘을 합친 **"데이터 레이크하우스"**가 표준임.
 
 - Open Table Formats: 특정 벤더에 종속되지 않고 데이터 레이크 위에서 ACID 트랜잭션을 보장하는 기술
@@ -16,6 +17,7 @@ draft: false
 - Storage/Compute 분리: 저장소는 S3/GCS, 컴퓨팅 엔진은 Snowflake/Spark/Trino 등을 필요에 따라 선택
 
 2) 분야별 필수 스택 (Must-Know)
+
 A. 데이터 처리 및 컴퓨팅 (Compute & Processing)
 Python (Polars, DuckDB): Pandas의 메모리 한계를 넘기 위해 Rust 기반 도구가 대세가 되었음. 단일 노드에서도 고성능을 보임.
 Apache Spark: 대용량 분산 처리의 표준은 여전히 Spark. PySpark가 메인이고 Scala는 플랫폼 엔지니어링 쪽으로 좁혀지는 추세.
