@@ -1,0 +1,35 @@
+---
+title: "Data Engineering Notes 01"
+date: "2026-02-05"
+summary: "Foundations of pipelines, storage, and batch processing."
+tags: ["data-engineering", "etl", "pipeline"]
+draft: false
+---
+데이터 엔지니어링은 결국 "데이터를 믿을 수 있게 만드는 일"임.
+
+1) 핵심 아키텍처 트렌드: Lakehouse & Decoupled
+과거에는 데이터 웨어하우스와 데이터 레이크를 따로 구축했지만, 지금은 이 둘을 합친 **"데이터 레이크하우스"**가 표준임.
+
+- Open Table Formats: 특정 벤더에 종속되지 않고 데이터 레이크 위에서 ACID 트랜잭션을 보장하는 기술
+    - Apache Iceberg: 현재 가장 강력한 대세, 주요 클라우드 및 엔진들이 Iceberg 지원을 최우선으로 함
+    - Delta Lake: Databricks 생태계에 강하지만 범용성 면에서 Iceberg가 우세
+- Storage/Compute 분리: 저장소는 S3/GCS, 컴퓨팅 엔진은 Snowflake/Spark/Trino 등을 필요에 따라 선택
+
+2) 분야별 필수 스택 (Must-Know)
+A. 데이터 처리 및 컴퓨팅 (Compute & Processing)
+Python (Polars, DuckDB): Pandas의 메모리 한계를 넘기 위해 Rust 기반 도구가 대세가 되었음. 단일 노드에서도 고성능을 보임.
+Apache Spark: 대용량 분산 처리의 표준은 여전히 Spark. PySpark가 메인이고 Scala는 플랫폼 엔지니어링 쪽으로 좁혀지는 추세.
+Streaming: Kafka는 여전히 표준이며, 실시간 처리를 위해 Flink 수요가 증가.
+
+B. 데이터 변환 (Transformation)
+dbt (Data Build Tool): **"사실상 표준(De facto standard)"**. SQL 기반 변환 파이프라인 구축, 버전 관리, 문서화, 테스트까지 제공.
+
+C. 오케스트레이션 (Orchestration)
+워크플로우를 스케줄링하고 관리하는 도구.
+Apache Airflow: 점유율은 높지만 무겁고 복잡한 단점.
+Dagster / Prefect: Airflow의 단점을 보완한 차세대 주자. 특히 Dagster는 Asset 중심 관리로 DX가 좋음.
+
+D. 데이터 품질 및 관측성 (Observability)
+파이프라인이 터졌을 때 "왜?"를 빠르게 찾고, 데이터가 "정상인지" 검증하는 영역.
+Great Expectations: 데이터 테스트 및 검증 도구.
+Monte Carlo / Datafold: 데이터 계보(Lineage) 추적 및 품질 모니터링 SaaS.

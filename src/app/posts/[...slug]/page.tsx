@@ -7,15 +7,12 @@ import Giscus from "@/components/Giscus";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 
-// 이 CSS가 없으면 수식이 텍스트처럼 깨져서 나옵니다.
-import "katex/dist/katex.min.css";
-
 export async function generateStaticParams() {
   return getAllPosts().map((p) => ({ slug: p.slug.split("/") }));
 }
 
-export async function generateMetadata(props: { params: Promise<{ slug: string[] }> }) {
-  const { slug } = await props.params;
+export async function generateMetadata(props: { params: { slug: string[] } }) {
+  const { slug } = props.params;
   const joined = slug.join("/");
   const post = getPostBySlug(joined);
   if (!post) return {};
@@ -25,8 +22,8 @@ export async function generateMetadata(props: { params: Promise<{ slug: string[]
   };
 }
 
-export default async function PostPage(props: { params: Promise<{ slug: string[] }> }) {
-  const { slug } = await props.params;
+export default async function PostPage(props: { params: { slug: string[] } }) {
+  const { slug } = props.params;
   const joined = slug.join("/");
 
   const post = getPostBySlug(joined);
@@ -51,7 +48,7 @@ export default async function PostPage(props: { params: Promise<{ slug: string[]
   return (
     <article style={{ maxWidth: "800px", margin: "0 auto", padding: "20px" }}>
       <div style={{ color: "#666", marginBottom: 6 }}>
-        <a href={`/${post.category}`} style={{ textDecoration: "none" }}>
+        <a href={`/${encodeURIComponent(post.category)}`} style={{ textDecoration: "none" }}>
           /{post.category}
         </a>
       </div>
