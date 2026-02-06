@@ -1,0 +1,37 @@
+---
+title: "Data Engineering Notes 01"
+date: "2026-02-06"
+summary: "Foundations of pipelines, storage, and batch processing."
+tags: ["data-engineering", "etl", "pipeline"]
+draft: false
+---
+Data engineering is ultimately the work of making data trustworthy.
+
+1) Core architecture trends: Lakehouse & Decoupled
+
+In the past, data warehouses and data lakes were built separately, but now the combined **"data lakehouse"** is the standard.
+
+- Open Table Formats: technologies that guarantee ACID transactions on data lakes without vendor lock-in
+    - Apache Iceberg: currently the strongest mainstream choice; major clouds and engines prioritize Iceberg support
+    - Delta Lake: strong in the Databricks ecosystem, but Iceberg wins in generality
+- Storage/compute separation: storage on S3/GCS, compute engines like Snowflake/Spark/Trino selected as needed
+
+2) Must-know stacks by area
+
+A. Compute & Processing
+Python (Polars, DuckDB): Rust-based tools became mainstream to overcome pandas memory limits, and they deliver high performance even on a single node.
+Apache Spark: The standard for large-scale distributed processing is still Spark. PySpark is the main path, and Scala is narrowing toward platform engineering.
+Streaming: Kafka remains the standard, and demand for Flink is increasing for real-time processing.
+
+B. Transformation
+dbt (Data Build Tool): **"De facto standard"**. Provides SQL-based transformation pipelines, version control, documentation, and tests.
+
+C. Orchestration
+Tools that schedule and manage workflows.
+Apache Airflow: High market share, but heavy and complex.
+Dagster / Prefect: Next-gen alternatives that address Airflow's drawbacks. Dagster in particular has strong DX with asset-centric management.
+
+D. Observability
+The area that quickly answers "why" when pipelines break and validates that data is "correct."
+Great Expectations: Data testing and validation.
+Monte Carlo / Datafold: SaaS for lineage tracking and quality monitoring.
