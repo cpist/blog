@@ -1,0 +1,70 @@
+---
+title: "벡터 공간과 부분 공간"
+date: "2026-02-10"
+summary: "Vector Space"
+tags: ["etc", "Linear Algebra"]
+draft: false
+---
+
+통계학의 "뼈대"인 **선형대수학(Linear Algebra)**과 "구조"를 다루는 **추상대수학(Abstract Algebra)**.
+특히 선형대수학은 회귀분석(Regression Analysis), 다변량분석(Multivariate Analysis)과 직결되므로 직관적인 이해가 필수다.
+거창한 공리(Axioms) 암기보다는 "이게 벡터 공간이냐 아니냐?", **"차원(Dimension)이 몇이냐?"**를 묻는 실용적인 질문에 대한 이해가 필요하다.
+
+## 1) 부분 공간 판별법 (The Subspace Test)
+
+어떤 집합 $W$가 벡터 공간 $V$의 부분 공간인지 확인하려면 딱 3가지만 체크하면 된다.
+
+- 영벡터(Zero Vector) 포함: $\mathbf{0} \in W$인가? (가장 먼저 확인: $0$이 없으면 바로 탈락)
+- 덧셈 닫힘 (Closed under Addition): $u, v \in W \implies u + v \in W$
+- 스칼라 곱 닫힘 (Closed under Scalar Mult.): $c \in \mathbb{R}, u \in W \implies cu \in W$
+
+예시:
+
+- $W = \{ (x, y) \in \mathbb{R}^2 \mid y = 2x + 1 \}$
+  - 영벡터 $(0, 0)$이 없으므로 부분 공간 아님. (직선이 원점을 안 지남)
+- $W = \{ (x, y) \in \mathbb{R}^2 \mid xy \ge 0 \}$
+  - 1, 3사분면 합집합. $(1, 2)$와 $(-2, -1)$은 있지만 더하면 $(-1, 1)$로 2사분면이 되어버림. 덧셈에 대해 닫혀있지 않음.
+
+## 2) 기저(Basis)와 차원(Dimension)
+
+통계학에서 "자유도(Degrees of Freedom)"와 연결되는 개념이다.
+
+- 기저(Basis): 공간을 생성(Span)하면서 선형 독립(Linearly Independent)인 벡터들의 집합.
+- 차원(Dimension): 기저 벡터의 개수.
+
+$\mathbb{R}^n$의 벡터 $m$개가 주어졌을 때, 이들이 생성하는 공간의 차원은 **행렬의 랭크(Rank)**와 같다. 행렬로 만들어 **Row Reduction (Gaussian Elimination)**을 했을 때, 0이 아닌 행의 개수를 세면 된다.
+
+## 3) 랭크-널리티 정리 (Rank-Nullity Theorem)
+
+선형대수학에서 가장 중요한 정리 중 하나.
+
+선형 변환 $T: V \to W$에 대해,
+
+$$
+\dim(V) = \text{rank}(T) + \text{nullity}(T)
+$$
+
+입력 차원($\dim(V)$) = 출력 차원(이미지의 차원) + 사라진 차원(커널의 차원).
+행렬 $A$가 $m \times n$ 행렬이라면 (열의 개수 $n$이 입력 차원):
+
+$$
+n = \text{rank}(A) + \text{nullity}(A)
+$$
+
+---
+
+**Q.** $4 \times 4$ 행렬 $A$의 모든 성분이 1이라고 하자. ($A_{ij} = 1$ for all $i, j$)
+이때, $A$의 **Nullity(영공간의 차원)**는 얼마인가?
+
+**Thinking Process**
+
+- Rank 구하기: $A$의 모든 행이 $[1, 1, 1, 1]$로 같다.
+- 행 연산(Row operation)을 하면 1행을 제외한 나머지 2, 3, 4행은 모두 $0$이 된다.
+- 따라서, 선형 독립인 행은 딱 1개뿐이다. $\rightarrow$ $\text{rank}(A) = 1$.
+
+Rank-Nullity 정리 적용:
+
+- $n = 4$ (열의 개수)
+- $4 = \text{rank}(A) + \text{nullity}(A) = 1 + \text{nullity}(A)$
+
+정답: $\text{nullity}(A) = 3$.
