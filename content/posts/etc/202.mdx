@@ -1,0 +1,124 @@
+---
+title: "Happy Number"
+date: "2026-02-18"
+summary: "LeetCode 202 - Happy Number 풀이 및 최적화"
+tags: ["etc", "algorithm", "leetcode"]
+draft: false
+---
+
+## 문제 설명
+
+숫자 n이 주어졌을 때, 각 자릿수의 제곱의 합을 반복적으로 계산했을 때 1이 되면 "Happy Number"이다. 순환(cycle)이 발생하면 Happy Number가 아니다.
+
+---
+
+## 1차 답안
+
+처음에는 단순히 10번 반복하여 결과를 확인하는 방식으로 접근했다.
+
+```cpp
+class Solution {
+public:
+    bool check(int n) {
+        if(n == 1) return true;
+        while (n >= 10) {
+            if(n >= 10) {
+                n /= 10;
+                continue;
+            }
+            if (n == 1) return true;
+            else return false;
+        }
+        return false;
+    }
+
+    bool isHappy(int n) {
+        int t = 10;
+        int temp = n;
+        int c = 0;
+        while (t != 0) {
+            if (temp == 0) {
+                if(check(c)) return true;
+                t -= 1;
+                temp = c;
+                c = 0;
+                continue;
+            }
+            int k = temp % 10;
+            c += k * k;
+            temp /= 10;
+        }
+        return false;
+    }
+};
+```
+
+### 문제점
+
+- 임의의 10번 반복이라는 논리가 약함
+- `check()` 함수의 로직이 복잡하고 잘못된 부분이 있음
+- 변수명(`t`, `c`, `k`)이 의미를 알기 어려움
+
+---
+
+## 최적화 답안
+
+Floyd's Cycle-Finding Algorithm(토끼와 거북이 알고리즘)을 적용하여 공간 복잡도 O(1)로 해결할 수 있다.
+
+```cpp
+class Solution {
+public:
+    // 각 자릿수의 제곱의 합을 구하는 함수
+    int getNext(int n) {
+        int totalSum = 0;
+        while (n > 0) {
+            int digit = n % 10;
+            totalSum += digit * digit;
+            n /= 10;
+        }
+        return totalSum;
+    }
+
+    bool isHappy(int n) {
+        int slow = n;
+        int fast = getNext(n);
+
+        // fast가 1이 아니고, slow와 fast가 만나지 않는 동안 반복
+        while (fast != 1 && slow != fast) {
+            slow = getNext(slow);           // 1스텝 이동
+            fast = getNext(getNext(fast));  // 2스텝 이동
+        }
+
+        // fast가 1이면 행복한 수, 아니면(slow==fast) 순환이므로 false
+        return fast == 1;
+    }
+};
+```
+
+---
+
+## 핵심 아이디어
+
+### 1. Floyd's Cycle-Finding Algorithm
+
+- **거북이(Slow)**: 한 단계씩 계산
+- **토끼(Fast)**: 두 단계씩 계산
+- **순환(Cycle)**: 순환이 존재하면 토끼와 거북이는 반드시 만나게 됨
+
+### 2. 공간 복잡도 O(1)
+
+- `HashSet`과 같은 추가 메모리 공간을 사용하지 않음
+- 두 개의 포인터만으로 순환 감지 가능
+
+### 3. 비둘기집 원리 (Pigeonhole Principle)
+
+- 수학적으로 숫자가 무한히 커질 수 없는 구조
+- 10번 이내로 사이클 생성 여부 확인이 가능했던 이유
+
+---
+
+## 개선 사항 요약
+
+1. **함수 분리**: `getNext()` 함수로 자릿수 제곱 합 로직을 깔끔하게 분리
+2. **정확한 종료 조건**: 10번 반복이 아닌 1 도달 또는 순환 감지 시 종료
+3. **변수명 개선**: `slow`, `fast` 등 의미가 명확한 변수명 사용 
