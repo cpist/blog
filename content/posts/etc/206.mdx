@@ -1,0 +1,106 @@
+---
+title: "Reverse Linked List"
+date: "2026-02-20"
+summary: "LeetCode 206 - Reverse Linked List 풀이 및 최적화"
+tags: ["etc", "algorithm", "leetcode"]
+draft: false
+---
+
+## 문제 설명
+
+ singly-linked list(단일 연결 리스트)가 주어졌을 때, 그 순서를 반대로 뒤집는 함수를 작성하시오.
+---
+
+## 1차 답안
+
+
+```/**
+ * Definition for singly-linked list.
+ * struct ListNode {
+ *     int val;
+ *     ListNode *next;
+ *     ListNode() : val(0), next(nullptr) {}
+ *     ListNode(int x) : val(x), next(nullptr) {}
+ *     ListNode(int x, ListNode *next) : val(x), next(next) {}
+ * };
+ */
+class Solution {
+public:
+    ListNode* reverseList(ListNode* head) {
+        if (!head) return nullptr;   
+
+        std::vector<ListNode*> temp;
+        while (head) {
+            temp.push_back(head);
+            head = head->next;
+        }
+
+        ListNode* tt = temp.back(); 
+        for (int k = (int)temp.size() - 2; k >= 0; k--) {
+            tt->next = temp[k];
+            tt = tt->next;
+        }
+
+        tt->next = nullptr;          
+
+        return temp.back();
+    }
+};
+```
+
+### 문제점
+
+- **공간 복잡도 O(n)**: 모든 노드를 `std::vector`에 저장해야 하므로额外的 메모리가 필요
+- **불필요한 메모리 할당**: 연결 리스트의 특성을 활용하지 않고 일반 자료구조를 사용
+- **코드 복잡도**: 단순한 문제에 비해 코드가 복잡함---
+
+## 최적화 답안
+
+Three Pointer technique을 사용하여 in-place로 연결 리스트를 역순으로 만든다. 추가적인 자료구조 없이 포인터만으로 해결한다.
+
+```class Solution {
+public:
+    ListNode* reverseList(ListNode* head) {
+        ListNode* prev = nullptr;
+        ListNode* curr = head;
+
+        while (curr) {
+            ListNode* nextTemp = curr->next; // 다음 노드 저장
+            curr->next = prev;               // 방향 뒤집기
+            prev = curr;                     // prev 이동
+            curr = nextTemp;                 // curr 이동
+        }
+
+        return prev;
+    }
+};
+```
+
+---
+
+## 핵심 아이디어
+
+### 1. Three Pointer Technique
+
+- **prev**: 이미 역순으로 뒤집힌 노드를 가리키는 포인터
+- **curr**: 현재 처리 중인 노드
+- **nextTemp**: curr의 다음 노드(뒤집기 전에 저장해두는 포인터)
+
+각 반복에서 `curr->next`를 `prev`로 변경하여 방향을 뒤집고, 세 포인터를 모두 한 칸씩 이동시킨다.
+
+### 2. In-Place Reversal
+
+- 추가적인 배열이나 자료구조 없이 메모리 공간을 전혀 사용하지 않음
+- 원본 리스트를 직접 수정하여 역순으로 만든다
+
+### 3. 시간 복잡도 O(n), 공간 복잡도 O(1)
+
+- 모든 노드를 한 번씩 방문하므로 O(n) 시간
+- 포인터 변수 3개만 사용하므로 O(1) 공간---
+
+## 개선 사항 요약
+
+1. **공간 복잡도 개선**: O(n) -> O(1)
+    - vector 사용 없이 포인터만으로 구현
+2. **알고리즘 간소화**: 세 개의 포인터로 직관적인 로직
+3. **연결 리스트 특성을 활용**: 추가 자료구조 없이 원본 데이터 직접 조작
