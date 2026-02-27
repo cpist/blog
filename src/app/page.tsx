@@ -59,7 +59,6 @@ export default function HomePage() {
       <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_right,_rgba(20,184,166,0.13),_transparent_45%),radial-gradient(circle_at_bottom_left,_rgba(245,158,11,0.12),_transparent_45%)]" />
 
       <section className="rounded-2xl border border-zinc-200/90 bg-white/95 p-6 shadow-[0_14px_36px_rgba(15,23,42,0.08)] backdrop-blur sm:p-10">
-        <p className="text-xs uppercase tracking-[0.28em] text-zinc-500">PhD Application Landing Page</p>
         <h2 className="mt-3 text-4xl font-semibold tracking-tight text-zinc-900 sm:text-5xl">
           CPIST
         </h2>
@@ -75,10 +74,8 @@ export default function HomePage() {
 
         <div className="mt-7 flex flex-wrap gap-3 text-sm font-medium">
           <Link
-            href="/cv.pdf"
+            href="/cv"
             className="rounded-full border border-zinc-900 px-4 py-2 text-zinc-900 transition hover:-translate-y-0.5 hover:bg-zinc-900 hover:text-white"
-            target="_blank"
-            rel="noopener noreferrer"
           >
             View CV
           </Link>
@@ -153,10 +150,8 @@ export default function HomePage() {
             your.email@example.com
           </a>
           <Link
-            href="/cv.pdf"
+            href="/cv"
             className="rounded-full border border-zinc-300 px-4 py-2 text-zinc-700 transition hover:border-zinc-900 hover:text-zinc-900"
-            target="_blank"
-            rel="noopener noreferrer"
           >
             CV (PDF)
           </Link>
