@@ -19,7 +19,7 @@ TDRR의 경우 TableGen의 DAG(dag) 기반으로 MLIR 패턴을 표현하는데,
 아래와 같은 문제들이 있음.
 1. Multi-result ops
 - MLIR은 결과가 여러 개인 op가 흔하다.
-- TDRR에서는 결과들을 $results로 묶고 $results__0 같은 매직 네이밍 규칙 (실제로 쓴 표현..) 으로 접근함 
+- TDRR에서는 결과들을 `$results`로 묶고 `$results__0` 같은 매직 네이밍 규칙 (실제로 쓴 표현..) 으로 접근함
   - 당연히 가독성과 안전성이 떨어짐
 - 이를 PDLL 에서는 threeResultOp.output1 같이 결과에 직접 접근이 가능함.
 

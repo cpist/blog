@@ -8,13 +8,15 @@ draft: false
 
 ## 문제 설명
 
- singly-linked list(단일 연결 리스트)가 주어졌을 때, 그 순서를 반대로 뒤집는 함수를 작성하시오.
+singly-linked list(단일 연결 리스트)가 주어졌을 때, 그 순서를 반대로 뒤집는 함수를 작성하시오.
+
 ---
 
 ## 1차 답안
 
 
-```/**
+```cpp
+/**
  * Definition for singly-linked list.
  * struct ListNode {
  *     int val;
@@ -50,15 +52,18 @@ public:
 
 ### 문제점
 
-- **공간 복잡도 O(n)**: 모든 노드를 `std::vector`에 저장해야 하므로额外的 메모리가 필요
+- **공간 복잡도 O(n)**: 모든 노드를 `std::vector`에 저장해야 하므로 추가 메모리가 필요
 - **불필요한 메모리 할당**: 연결 리스트의 특성을 활용하지 않고 일반 자료구조를 사용
-- **코드 복잡도**: 단순한 문제에 비해 코드가 복잡함---
+- **코드 복잡도**: 단순한 문제에 비해 코드가 복잡함
+
+---
 
 ## 최적화 답안
 
 Three Pointer technique을 사용하여 in-place로 연결 리스트를 역순으로 만든다. 추가적인 자료구조 없이 포인터만으로 해결한다.
 
-```class Solution {
+```cpp
+class Solution {
 public:
     ListNode* reverseList(ListNode* head) {
         ListNode* prev = nullptr;
@@ -96,7 +101,9 @@ public:
 ### 3. 시간 복잡도 O(n), 공간 복잡도 O(1)
 
 - 모든 노드를 한 번씩 방문하므로 O(n) 시간
-- 포인터 변수 3개만 사용하므로 O(1) 공간---
+- 포인터 변수 3개만 사용하므로 O(1) 공간
+
+---
 
 ## 개선 사항 요약
 

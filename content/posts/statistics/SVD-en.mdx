@@ -10,7 +10,12 @@ SVD and QR decomposition are used in AI compilers for weight compression and com
 1) QR Decomposition
 QR decomposition represents a matrix $A$ as a product of an **orthogonal matrix $Q$** and an **upper triangular matrix $R$**.
 
-The formula is $$A = QR$$
+The formula is
+
+$$
+A = QR
+$$
+
 - $Q$ (Orthogonal Matrix): column vectors are mutually orthogonal and have unit length. ($Q^TQ = I$)
     - Orthogonal means the inner product of two vectors is 0.
 - $R$ (Upper Triangular Matrix): all entries below the diagonal are 0.
@@ -23,7 +28,12 @@ The formula is $$A = QR$$
 2) SVD (Singular Value Decomposition)
 SVD decomposes any $m \times n$ matrix $A$ into a product of three matrices, and is one of the most powerful tools in linear algebra.
 
-The formula is $$A = U\Sigma V^T$$
+The formula is
+
+$$
+A = U\Sigma V^T
+$$
+
 - $U$ (Left Singular Matrix): an $m \times m$ orthogonal matrix of eigenvectors of $AA^T$.
 - $\Sigma$ (Singular Value Matrix): an $m \times n$ diagonal (rectangular) matrix with singular values $\sigma_i = \sqrt{\lambda_i}$ on the diagonal, sorted in descending order.
 - $V$ (Right Singular Matrix): an $n \times n$ orthogonal matrix of eigenvectors of $A^TA$.

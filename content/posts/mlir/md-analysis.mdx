@@ -104,8 +104,8 @@ class MyAnalysis
   - ex) unreachable block
   - 이런건 반드시 보수적으로 처리해야 한다는거
 
-=====================================================================
+---
 
 요약해 보자면
 MLIR의 Forward Dataflow Analysis는 Lattice + ForwardDataFlowAnalysis + visitOperation(transfer function) 구조로 이루어지며, 
-단조적인 join 규칙과 pessimistic(top) 상태를 통해 안전하고 확장 가능한 분석을 가능하게 한다는 것이다.  
+단조적인 join 규칙과 pessimistic(top) 상태를 통해 안전하고 확장 가능한 분석을 가능하게 한다는 것이다.

@@ -145,6 +145,6 @@ transform.my.change_call_target %call, "microkernel"
 - 여기서 %call은 이전 transform op (outline) 가 만들어 준 실제 func.call을 가리키는 handle임.
 - 즉 Transform dialect 는 정확히 특정 call 하나를 찍어서 바꿀 수가 있음.
 
-=====================================================================
+---
 
 요약해 보자면 Transform을 확장해서 실제 IR을 안전하고, 추적가능하고, 실패까지 관리하면서 바꾸는 정식 커스텀 변환을 만드는 전 과정을 다루어 보았다.
