@@ -144,16 +144,16 @@ export default function HomePage() {
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
           <a
-            href="mailto:your.email@example.com"
+            href="mailto:tinyfrog12@gmail.com"
             className="rounded-full border border-zinc-300 px-4 py-2 text-zinc-700 transition hover:border-zinc-900 hover:text-zinc-900"
           >
-            your.email@example.com
+            tinyfrog12@gmail.com
           </a>
           <Link
             href="/cv"
             className="rounded-full border border-zinc-300 px-4 py-2 text-zinc-700 transition hover:border-zinc-900 hover:text-zinc-900"
           >
-            CV (PDF)
+            View CV
           </Link>
         </div>
       </section>
